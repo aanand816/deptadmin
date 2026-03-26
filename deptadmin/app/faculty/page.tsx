@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { 
-  UsersIcon, SearchIcon, FilterIcon, PlusIcon, 
+import {
+  UsersIcon, SearchIcon, FilterIcon, PlusIcon,
   MoreHorizontalIcon, MailIcon, PhoneIcon, CheckCircle2Icon,
   ArrowLeftIcon, BookOpenIcon, ClockIcon, MapPinIcon,
-  BriefcaseIcon, ChevronRightIcon, CalendarIcon, HistoryIcon
+  BriefcaseIcon, ChevronRightIcon, CalendarIcon, HistoryIcon,
+  UserPlusIcon
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,12 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import {
+  Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog"
+import {
+  Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 
 type Faculty = {
   id: string;
@@ -31,89 +38,124 @@ type Faculty = {
   pastCourses: { course: string, term: string, students: number }[];
 }
 
+const initialFacultyData: Faculty[] = [
+  {
+    id: "f1", name: "Kyra Smith", role: "Professor", department: "Applied Science", status: "Active",
+    email: "kyra.smith@archie.edu", phone: "+1 (555) 123-4567", office: "L-204",
+    preferredSubjects: ["Software Engineering", "Systems Design", "Machine Learning"],
+    availability: [
+      { day: "Monday", times: "9:00 AM - 2:00 PM" },
+      { day: "Wednesday", times: "9:00 AM - 2:00 PM" },
+      { day: "Friday", times: "11:00 AM - 4:00 PM" }
+    ],
+    assignments: [
+      { course: "SWE-410 Advanced Software Eng.", time: "Mon/Wed 10:00 AM", term: "Winter 2025" },
+      { course: "SWE-200 Intro to SWE", time: "Fri 12:00 PM", term: "Winter 2025" }
+    ],
+    pastCourses: [
+      { course: "SWE-410 Advanced Software Eng.", term: "Fall 2024", students: 45 },
+      { course: "SWE-350 Web Development II", term: "Fall 2024", students: 62 },
+      { course: "SWE-200 Intro to SWE", term: "Summer 2024", students: 30 }
+    ]
+  },
+  {
+    id: "f2", name: "John Doe", role: "Associate Professor", department: "Applied Science", status: "On Leave",
+    email: "john.doe@archie.edu", phone: "+1 (555) 987-6543", office: "L-112",
+    preferredSubjects: ["Data Structures", "Algorithms", "C++ Programming"],
+    availability: [],
+    assignments: [],
+    pastCourses: [
+      { course: "DAT-200 Data Structures", term: "Fall 2024", students: 120 },
+      { course: "DAT-300 Algorithms", term: "Spring 2024", students: 85 }
+    ]
+  },
+  {
+    id: "f3", name: "Alice Johnson", role: "Lecturer", department: "Business", status: "Active",
+    email: "alice.j@archie.edu", phone: "+1 (555) 345-6789", office: "B-405",
+    preferredSubjects: ["Intro to Business", "Marketing 101", "Business Ethics"],
+    availability: [
+      { day: "Tuesday", times: "10:00 AM - 5:00 PM" },
+      { day: "Thursday", times: "10:00 AM - 5:00 PM" }
+    ],
+    assignments: [
+      { course: "BUS-101 Intro to Business", time: "Tue/Thu 2:00 PM", term: "Winter 2025" }
+    ],
+    pastCourses: []
+  },
+  {
+    id: "f4", name: "Bob Martin", role: "Adjunct Faculty", department: "Health Sciences", status: "Active",
+    email: "bob.martin@archie.edu", phone: "+1 (555) 234-5678", office: "H-332",
+    preferredSubjects: ["Anatomy", "Clinical Practice", "Healthcare Ethics"],
+    availability: [
+      { day: "Monday", times: "1:00 PM - 6:00 PM" },
+      { day: "Wednesday", times: "1:00 PM - 6:00 PM" }
+    ],
+    assignments: [
+      { course: "NUR-400 Clinical Practice IV", time: "Mon/Wed 1:00 PM", term: "Winter 2025" }
+    ],
+    pastCourses: [
+      { course: "NUR-300 Clinical Practice III", term: "Fall 2024", students: 40 },
+      { course: "NUR-250 Healthcare Ethics", term: "Spring 2024", students: 110 }
+    ]
+  },
+  {
+    id: "f5", name: "Eve Davis", role: "Professor", department: "Media & Creative Arts", status: "Active",
+    email: "eve.davis@archie.edu", phone: "+1 (555) 876-5432", office: "M-101",
+    preferredSubjects: ["Digital Media Production", "Graphic Design", "UI/UX Design"],
+    availability: [
+      { day: "Tuesday", times: "9:00 AM - 1:00 PM" },
+      { day: "Thursday", times: "9:00 AM - 1:00 PM" },
+      { day: "Friday", times: "9:00 AM - 1:00 PM" }
+    ],
+    assignments: [
+      { course: "MED-305 Digital Media Prod.", time: "Tue/Thu 10:00 AM", term: "Winter 2025" }
+    ],
+    pastCourses: [
+      { course: "MED-305 Digital Media Prod.", term: "Fall 2024", students: 35 },
+      { course: "MED-100 Graphic Design I", term: "Fall 2024", students: 150 },
+      { course: "MED-200 UI/UX Design", term: "Spring 2024", students: 80 }
+    ]
+  },
+]
+
 export default function FacultyPage() {
   const [viewState, setViewState] = React.useState<"directory" | "details">("directory")
   const [selectedFaculty, setSelectedFaculty] = React.useState<Faculty | null>(null)
+  const [facultyData, setFacultyData] = React.useState<Faculty[]>(initialFacultyData)
 
-  const facultyData: Faculty[] = [
-    { 
-      id: "f1", name: "Kyra Smith", role: "Professor", department: "Applied Science", status: "Active", 
-      email: "kyra.smith@archie.edu", phone: "+1 (555) 123-4567", office: "L-204",
-      preferredSubjects: ["Software Engineering", "Systems Design", "Machine Learning"],
-      availability: [
-        { day: "Monday", times: "9:00 AM - 2:00 PM" },
-        { day: "Wednesday", times: "9:00 AM - 2:00 PM" },
-        { day: "Friday", times: "11:00 AM - 4:00 PM" }
-      ],
-      assignments: [
-        { course: "SWE-410 Advanced Software Eng.", time: "Mon/Wed 10:00 AM", term: "Winter 2025" },
-        { course: "SWE-200 Intro to SWE", time: "Fri 12:00 PM", term: "Winter 2025" }
-      ],
-      pastCourses: [
-        { course: "SWE-410 Advanced Software Eng.", term: "Fall 2024", students: 45 },
-        { course: "SWE-350 Web Development II", term: "Fall 2024", students: 62 },
-        { course: "SWE-200 Intro to SWE", term: "Summer 2024", students: 30 }
-      ]
-    },
-    { 
-      id: "f2", name: "John Doe", role: "Associate Professor", department: "Applied Science", status: "On Leave", 
-      email: "john.doe@archie.edu", phone: "+1 (555) 987-6543", office: "L-112",
-      preferredSubjects: ["Data Structures", "Algorithms", "C++ Programming"],
+  // Add Faculty dialog state
+  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false)
+  const [form, setForm] = React.useState({
+    name: "", email: "", phone: "", office: "",
+    role: "", department: "", status: "Active",
+  })
+
+  const handleFormChange = (field: string, value: string | null) => {
+    setForm(prev => ({ ...prev, [field]: value ?? "" }))
+  }
+
+  const isFormValid = form.name && form.email && form.role && form.department
+
+  const handleAddFaculty = (e: React.FormEvent) => {
+    e.preventDefault()
+    const newFaculty: Faculty = {
+      id: `f${facultyData.length + 1}`,
+      name: form.name,
+      role: form.role,
+      department: form.department,
+      status: form.status,
+      email: form.email,
+      phone: form.phone || "—",
+      office: form.office || "—",
+      preferredSubjects: [],
       availability: [],
       assignments: [],
-      pastCourses: [
-        { course: "DAT-200 Data Structures", term: "Fall 2024", students: 120 },
-        { course: "DAT-300 Algorithms", term: "Spring 2024", students: 85 }
-      ]
-    },
-    { 
-      id: "f3", name: "Alice Johnson", role: "Lecturer", department: "Business", status: "Active", 
-      email: "alice.j@archie.edu", phone: "+1 (555) 345-6789", office: "B-405",
-      preferredSubjects: ["Intro to Business", "Marketing 101", "Business Ethics"],
-      availability: [
-        { day: "Tuesday", times: "10:00 AM - 5:00 PM" },
-        { day: "Thursday", times: "10:00 AM - 5:00 PM" }
-      ],
-      assignments: [
-        { course: "BUS-101 Intro to Business", time: "Tue/Thu 2:00 PM", term: "Winter 2025" }
-      ],
-      pastCourses: []
-    },
-    { 
-      id: "f4", name: "Bob Martin", role: "Adjunct Faculty", department: "Health Sciences", status: "Active", 
-      email: "bob.martin@archie.edu", phone: "+1 (555) 234-5678", office: "H-332",
-      preferredSubjects: ["Anatomy", "Clinical Practice", "Healthcare Ethics"],
-      availability: [
-        { day: "Monday", times: "1:00 PM - 6:00 PM" },
-        { day: "Wednesday", times: "1:00 PM - 6:00 PM" }
-      ],
-      assignments: [
-        { course: "NUR-400 Clinical Practice IV", time: "Mon/Wed 1:00 PM", term: "Winter 2025" }
-      ],
-      pastCourses: [
-        { course: "NUR-300 Clinical Practice III", term: "Fall 2024", students: 40 },
-        { course: "NUR-250 Healthcare Ethics", term: "Spring 2024", students: 110 }
-      ]
-    },
-    { 
-      id: "f5", name: "Eve Davis", role: "Professor", department: "Media & Creative Arts", status: "Active", 
-      email: "eve.davis@archie.edu", phone: "+1 (555) 876-5432", office: "M-101",
-      preferredSubjects: ["Digital Media Production", "Graphic Design", "UI/UX Design"],
-      availability: [
-        { day: "Tuesday", times: "9:00 AM - 1:00 PM" },
-        { day: "Thursday", times: "9:00 AM - 1:00 PM" },
-        { day: "Friday", times: "9:00 AM - 1:00 PM" }
-      ],
-      assignments: [
-        { course: "MED-305 Digital Media Prod.", time: "Tue/Thu 10:00 AM", term: "Winter 2025" }
-      ],
-      pastCourses: [
-        { course: "MED-305 Digital Media Prod.", term: "Fall 2024", students: 35 },
-        { course: "MED-100 Graphic Design I", term: "Fall 2024", students: 150 },
-        { course: "MED-200 UI/UX Design", term: "Spring 2024", students: 80 }
-      ]
-    },
-  ]
+      pastCourses: [],
+    }
+    setFacultyData(prev => [...prev, newFaculty])
+    setIsAddDialogOpen(false)
+    setForm({ name: "", email: "", phone: "", office: "", role: "", department: "", status: "Active" })
+  }
 
   const showDetails = (faculty: Faculty) => {
     setSelectedFaculty(faculty)
@@ -140,8 +182,8 @@ export default function FacultyPage() {
                   <span>{selectedFaculty.department}</span>
                   <span className="text-muted-foreground/30">•</span>
                   <Badge variant="secondary" className={`px-2 py-0 text-xs border-0 ${
-                    selectedFaculty.status === "Active" 
-                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" 
+                    selectedFaculty.status === "Active"
+                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                       : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
                   }`}>
                     {selectedFaculty.status}
@@ -150,7 +192,7 @@ export default function FacultyPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="flex gap-2">
             <Button variant="outline" className="rounded-xl font-medium"><MoreHorizontalIcon className="size-4" /></Button>
             <Button className="rounded-xl font-medium px-6 shadow-md"><MailIcon className="mr-2 size-4" /> Message</Button>
@@ -214,7 +256,7 @@ export default function FacultyPage() {
                 )}
               </CardContent>
             </Card>
-            
+
             <Card className="shadow-sm border-border/60 bg-card">
               <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
                 <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
@@ -223,11 +265,13 @@ export default function FacultyPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4 flex flex-wrap gap-2">
-                {selectedFaculty.preferredSubjects.map(sub => (
+                {selectedFaculty.preferredSubjects.length > 0 ? selectedFaculty.preferredSubjects.map(sub => (
                    <Badge key={sub} variant="secondary" className="bg-primary/5 text-primary hover:bg-primary/10 border-primary/10 py-1 px-3 text-sm font-medium">
                      {sub}
                    </Badge>
-                ))}
+                )) : (
+                  <p className="text-muted-foreground text-sm font-medium">No preferred subjects listed.</p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -279,7 +323,7 @@ export default function FacultyPage() {
                        <BookOpenIcon className="size-5" />
                      </div>
                      <p className="text-foreground/80 font-semibold">No assigned courses right now</p>
-                     <p className="text-muted-foreground text-sm max-w-sm mt-1 mb-4">This professor doesn't have any classes scheduled for the upcoming terms.</p>
+                     <p className="text-muted-foreground text-sm max-w-sm mt-1 mb-4">This professor doesn&apos;t have any classes scheduled for the upcoming terms.</p>
                      <Button variant="outline" className="shadow-sm">Assign Course Schedule</Button>
                    </div>
                 )}
@@ -335,6 +379,147 @@ export default function FacultyPage() {
 
   return (
     <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-500 w-full min-h-full">
+      {/* Add Faculty Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden rounded-2xl shadow-xl [&>button]:top-4 [&>button]:right-4">
+          {/* Dialog Header */}
+          <div className="flex items-start gap-3 px-6 py-5 border-b border-border/50 bg-muted/30 pr-12">
+            <div className="p-2 bg-primary/10 rounded-xl shrink-0 mt-0.5">
+              <UserPlusIcon className="size-5 text-primary" />
+            </div>
+            <div>
+              <DialogTitle className="text-base font-bold text-foreground">Add New Faculty</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                Fill in the details to register a new staff member.
+              </DialogDescription>
+            </div>
+          </div>
+
+          <form onSubmit={handleAddFaculty}>
+            <div className="px-6 py-5 space-y-4">
+              {/* Row 1: Name + Email */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Full Name <span className="text-destructive">*</span></label>
+                  <Input
+                    placeholder="e.g. Jane Smith"
+                    value={form.name}
+                    onChange={e => handleFormChange("name", e.target.value)}
+                    className="h-9 rounded-lg border-border/60 bg-background"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Email Address <span className="text-destructive">*</span></label>
+                  <Input
+                    type="email"
+                    placeholder="jane@archie.edu"
+                    value={form.email}
+                    onChange={e => handleFormChange("email", e.target.value)}
+                    className="h-9 rounded-lg border-border/60 bg-background"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Phone + Office */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Phone Number</label>
+                  <Input
+                    placeholder="+1 (555) 000-0000"
+                    value={form.phone}
+                    onChange={e => handleFormChange("phone", e.target.value)}
+                    className="h-9 rounded-lg border-border/60 bg-background"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Office Location</label>
+                  <Input
+                    placeholder="e.g. L-205"
+                    value={form.office}
+                    onChange={e => handleFormChange("office", e.target.value)}
+                    className="h-9 rounded-lg border-border/60 bg-background"
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Role + Department */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Role <span className="text-destructive">*</span></label>
+                  <Select value={form.role} onValueChange={v => handleFormChange("role", v)}>
+                    <SelectTrigger className="h-9 w-full rounded-lg border-border/60 bg-background">
+                      <SelectValue placeholder="Select role..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="Professor">Professor</SelectItem>
+                        <SelectItem value="Associate Professor">Associate Professor</SelectItem>
+                        <SelectItem value="Lecturer">Lecturer</SelectItem>
+                        <SelectItem value="Adjunct Faculty">Adjunct Faculty</SelectItem>
+                        <SelectItem value="Visiting Professor">Visiting Professor</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Department <span className="text-destructive">*</span></label>
+                  <Select value={form.department} onValueChange={v => handleFormChange("department", v)}>
+                    <SelectTrigger className="h-9 w-full rounded-lg border-border/60 bg-background">
+                      <SelectValue placeholder="Select dept..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="Applied Science">Applied Science</SelectItem>
+                        <SelectItem value="Business">Business</SelectItem>
+                        <SelectItem value="Health Sciences">Health Sciences</SelectItem>
+                        <SelectItem value="Media & Creative Arts">Media & Creative Arts</SelectItem>
+                        <SelectItem value="Social & Community Services">Social & Community Services</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Row 4: Status */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Employment Status</label>
+                <Select value={form.status} onValueChange={v => handleFormChange("status", v)}>
+                  <SelectTrigger className="h-9 w-full rounded-lg border-border/60 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="On Leave">On Leave</SelectItem>
+                      <SelectItem value="Inactive">Inactive</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter className="px-6 py-4 border-t border-border/50 bg-muted/20 rounded-b-2xl -mx-0 -mb-0 mt-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsAddDialogOpen(false)}
+                className="rounded-xl"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!isFormValid}
+                className="rounded-xl px-6 shadow-md shadow-primary/20 font-semibold"
+              >
+                <UserPlusIcon className="mr-2 size-4" />
+                Add Faculty
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -346,7 +531,11 @@ export default function FacultyPage() {
             <FilterIcon className="size-4" />
             Filter Staff
           </Button>
-          <Button size="lg" className="rounded-full px-6 shadow-md shadow-primary/20 hover:shadow-lg transition-all hover:-translate-y-0.5 active:translate-y-0 bg-primary text-primary-foreground font-semibold">
+          <Button
+            size="lg"
+            onClick={() => setIsAddDialogOpen(true)}
+            className="rounded-full px-6 shadow-md shadow-primary/20 hover:shadow-lg transition-all hover:-translate-y-0.5 active:translate-y-0 bg-primary text-primary-foreground font-semibold"
+          >
             <PlusIcon className="mr-2 size-5" />
             Add Faculty
           </Button>
@@ -361,7 +550,7 @@ export default function FacultyPage() {
             <div className="p-2 bg-blue-500/10 rounded-lg"><UsersIcon className="size-4 text-blue-500" /></div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">124</div>
+            <div className="text-2xl font-bold text-foreground">{facultyData.length + 119}</div>
             <p className="text-xs text-muted-foreground mt-1 font-medium text-emerald-500">+12% from last year</p>
           </CardContent>
         </Card>
@@ -402,8 +591,8 @@ export default function FacultyPage() {
             </TableHeader>
             <TableBody>
               {facultyData.map((faculty, i) => (
-                <TableRow 
-                  key={i} 
+                <TableRow
+                  key={i}
                   onClick={() => showDetails(faculty)}
                   className="h-16 group hover:bg-muted/30 transition-colors cursor-pointer"
                 >
@@ -426,8 +615,8 @@ export default function FacultyPage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary" className={`px-2.5 py-0.5 text-xs font-medium border-0 ${
-                      faculty.status === "Active" 
-                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" 
+                      faculty.status === "Active"
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                         : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
                     }`}>
                       {faculty.status}
