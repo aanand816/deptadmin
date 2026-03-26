@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { 
   SearchIcon, PlusIcon, GraduationCapIcon, ArrowLeftIcon, 
   BookOpenIcon, ClockIcon, UsersIcon, LayoutDashboardIcon, 
@@ -28,6 +29,8 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 
 export function Dashboard() {
+  const router = useRouter()
+
   // Original term selector modal state
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   
@@ -44,12 +47,12 @@ export function Dashboard() {
   const [activeDepartment, setActiveDepartment] = React.useState<string>("Faculty of Applied Science and Technology")
 
   const [assignedFaculty, setAssignedFaculty] = React.useState([
-    { name: "Kyra Smith", course: "Software Engineering", time: "Mon/Wed 10:00 AM", load: "Full-Time" },
-    { name: "John Doe", course: "Data Structures", time: "Tue/Thu 2:00 PM", load: "Part-Time" },
-    { name: "Alice Johnson", course: "Web Development", time: "Fri 9:00 AM", load: "Full-Time" },
-    { name: "Bob Martin", course: "Database Management", time: "Mon/Wed 1:00 PM", load: "Part-Time" },
-    { name: "Eve Davis", course: "Network Security", time: "Tue/Thu 10:00 AM", load: "Full-Time" },
-    { name: "Michael Chang", course: "Machine Learning", time: "Mon/Wed 3:00 PM", load: "Full-Time" },
+    { id: "f1", name: "Kyra Smith", course: "Software Engineering", time: "Mon/Wed 10:00 AM", load: "Full-Time" },
+    { id: "f2", name: "John Doe", course: "Data Structures", time: "Tue/Thu 2:00 PM", load: "Part-Time" },
+    { id: "f3", name: "Alice Johnson", course: "Web Development", time: "Fri 9:00 AM", load: "Full-Time" },
+    { id: "f4", name: "Bob Martin", course: "Database Management", time: "Mon/Wed 1:00 PM", load: "Part-Time" },
+    { id: "f5", name: "Eve Davis", course: "Network Security", time: "Tue/Thu 10:00 AM", load: "Full-Time" },
+    { id: "", name: "Michael Chang", course: "Machine Learning", time: "Mon/Wed 3:00 PM", load: "Full-Time" },
   ])
 
   const departments = [
@@ -80,6 +83,7 @@ export function Dashboard() {
     const randomTime = mockTimes[Math.floor(Math.random() * mockTimes.length)];
     
     setAssignedFaculty(prev => [...prev, {
+      id: "",
       name: selectedFaculty || "Selected Professor",
       course: selectedSubject || "Assigned Subject",
       time: randomTime,
@@ -125,7 +129,18 @@ export function Dashboard() {
                       <div className="bg-primary/10 text-primary p-2.5 rounded-full ring-2 ring-primary/5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                         <UsersIcon className="size-4" />
                       </div>
-                      <CardTitle className="text-base font-semibold">{teacher.name}</CardTitle>
+                      <CardTitle
+                        className={`text-base font-semibold transition-colors ${
+                          teacher.id
+                            ? "cursor-pointer hover:text-primary underline-offset-2 hover:underline"
+                            : ""
+                        }`}
+                        onClick={() => {
+                          if (teacher.id) router.push(`/faculty?id=${teacher.id}`)
+                        }}
+                      >
+                        {teacher.name}
+                      </CardTitle>
                     </div>
                     <Badge variant={teacher.load === "Full-Time" ? "default" : "secondary"} className="font-medium shadow-none">
                       {teacher.load}

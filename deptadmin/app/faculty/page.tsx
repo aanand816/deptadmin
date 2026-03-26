@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useSearchParams } from "next/navigation"
 import {
   UsersIcon, SearchIcon, FilterIcon, PlusIcon,
   MoreHorizontalIcon, MailIcon, PhoneIcon, CheckCircle2Icon,
@@ -118,10 +119,23 @@ const initialFacultyData: Faculty[] = [
   },
 ]
 
-export default function FacultyPage() {
+function FacultyPageInner() {
+  const searchParams = useSearchParams()
   const [viewState, setViewState] = React.useState<"directory" | "details">("directory")
   const [selectedFaculty, setSelectedFaculty] = React.useState<Faculty | null>(null)
   const [facultyData, setFacultyData] = React.useState<Faculty[]>(initialFacultyData)
+
+  // Auto-open faculty profile when navigated from the dashboard
+  React.useEffect(() => {
+    const id = searchParams.get("id")
+    if (id) {
+      const found = initialFacultyData.find(f => f.id === id)
+      if (found) {
+        setSelectedFaculty(found)
+        setViewState("details")
+      }
+    }
+  }, [searchParams])
 
   // Add Faculty dialog state
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false)
@@ -641,3 +655,12 @@ export default function FacultyPage() {
     </div>
   )
 }
+
+export default function FacultyPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <FacultyPageInner />
+    </React.Suspense>
+  )
+}
+
