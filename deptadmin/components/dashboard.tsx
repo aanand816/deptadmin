@@ -2,12 +2,11 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { 
-  SearchIcon, PlusIcon, GraduationCapIcon, ArrowLeftIcon, 
-  BookOpenIcon, ClockIcon, UsersIcon, LayoutDashboardIcon, 
-  SettingsIcon, LogOutIcon, BellIcon, MenuIcon, XIcon,
-  ChevronDownIcon, BriefcaseIcon, CalendarIcon, FolderOpenIcon,
-  FilterIcon, ChevronRightIcon, MoreHorizontalIcon, UserPlusIcon
+import {
+  SearchIcon, PlusIcon, GraduationCapIcon, ArrowLeftIcon,
+  BookOpenIcon, ClockIcon, UsersIcon,
+  BriefcaseIcon, CalendarIcon, FolderOpenIcon,
+  FilterIcon, ChevronRightIcon, UserPlusIcon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -28,16 +27,135 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 
+// Shared localStorage key — faculty page reads/writes the same store
+export const ASSIGNMENT_STORAGE_KEY = "archie_assignments"
+
+export type AssignmentRecord = {
+  assignmentId: string
+  id: string        // faculty id
+  name: string
+  course: string
+  time: string
+  load: string
+  status: "Pending" | "Assigned" | "Rejected"
+}
+
+const defaultAssignments: AssignmentRecord[] = [
+  { assignmentId: "a1", id: "f1", name: "Kyra Smith",    course: "Software Engineering",  time: "Mon/Wed 10:00 AM", load: "Full-Time", status: "Assigned" },
+  { assignmentId: "a2", id: "f2", name: "John Doe",      course: "Data Structures",       time: "Tue/Thu 2:00 PM",  load: "Part-Time", status: "Assigned" },
+  { assignmentId: "a3", id: "f3", name: "Alice Johnson", course: "Web Development",       time: "Fri 9:00 AM",      load: "Full-Time", status: "Assigned" },
+  { assignmentId: "a4", id: "f4", name: "Bob Martin",    course: "Database Management",   time: "Mon/Wed 1:00 PM",  load: "Part-Time", status: "Assigned" },
+  { assignmentId: "a5", id: "f5", name: "Eve Davis",     course: "Network Security",      time: "Tue/Thu 10:00 AM", load: "Full-Time", status: "Assigned" },
+]
+
+// Hours per course per week (standard)
+const HOURS_PER_COURSE = 3
+
+type FacultyRosterEntry = {
+  id: string
+  name: string
+  role: string
+  employmentType: "Full-Time" | "Part-Time"
+  seniority: number // years — higher means higher assignment priority
+  maxHoursPerWeek: number
+  availability: { day: string; times: string }[]
+  taughtSubjects: string[] // subjects previously taught — used for subject-based filtering
+}
+
+// Static faculty pool with capacity, availability, and subject history.
+// Sorted descending by seniority so priority order is preserved after filtering.
+const facultyRoster: FacultyRosterEntry[] = [
+  {
+    id: "f1", name: "Kyra Smith", role: "Professor",
+    employmentType: "Full-Time", seniority: 15, maxHoursPerWeek: 18,
+    taughtSubjects: ["Software Engineering", "Web Development", "Cloud Computing", "Computer Networks"],
+    availability: [
+      { day: "Monday",    times: "9:00 AM - 2:00 PM" },
+      { day: "Wednesday", times: "9:00 AM - 2:00 PM" },
+      { day: "Friday",    times: "11:00 AM - 4:00 PM" },
+    ],
+  },
+  {
+    id: "f5", name: "Eve Davis", role: "Professor",
+    employmentType: "Full-Time", seniority: 12, maxHoursPerWeek: 18,
+    taughtSubjects: ["Digital Media Production", "Graphic Design", "UI/UX Design"],
+    availability: [
+      { day: "Tuesday",  times: "9:00 AM - 1:00 PM" },
+      { day: "Thursday", times: "9:00 AM - 1:00 PM" },
+      { day: "Friday",   times: "9:00 AM - 1:00 PM" },
+    ],
+  },
+  {
+    id: "f2", name: "John Doe", role: "Associate Professor",
+    employmentType: "Full-Time", seniority: 10, maxHoursPerWeek: 18,
+    taughtSubjects: ["Advanced Algorithms", "Database Management", "Operating Systems", "Computer Networks"],
+    availability: [], // currently on leave — no availability
+  },
+  {
+    id: "f3", name: "Alice Johnson", role: "Lecturer",
+    employmentType: "Part-Time", seniority: 5, maxHoursPerWeek: 9,
+    taughtSubjects: ["Intro to Business", "Marketing 101", "Business Ethics"],
+    availability: [
+      { day: "Tuesday",  times: "10:00 AM - 5:00 PM" },
+      { day: "Thursday", times: "10:00 AM - 5:00 PM" },
+    ],
+  },
+  {
+    id: "f4", name: "Bob Martin", role: "Adjunct Faculty",
+    employmentType: "Part-Time", seniority: 3, maxHoursPerWeek: 9,
+    taughtSubjects: ["Anatomy", "Clinical Practice", "Healthcare Ethics"],
+    availability: [
+      { day: "Monday",    times: "1:00 PM - 6:00 PM" },
+      { day: "Wednesday", times: "1:00 PM - 6:00 PM" },
+    ],
+  },
+]
+
+// Parse "9:00 AM" → 24h integer (9), "1:00 PM" → 13, etc.
+function parseHour(timeStr: string): number {
+  const [time, period] = timeStr.trim().split(" ")
+  const h = parseInt(time.split(":")[0], 10)
+  if (period === "PM" && h !== 12) return h + 12
+  if (period === "AM" && h === 12) return 0
+  return h
+}
+
+// Generate individual hourly slots from a faculty member's availability windows.
+// e.g. { day: "Monday", times: "9:00 AM - 2:00 PM" } → ["Mon 9:00 AM", "Mon 10:00 AM", ...]
+function generateTimeSlots(availability: { day: string; times: string }[]): string[] {
+  const abbr: Record<string, string> = {
+    Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed",
+    Thursday: "Thu", Friday: "Fri", Saturday: "Sat", Sunday: "Sun",
+  }
+  const slots: string[] = []
+  for (const avail of availability) {
+    const [startStr, endStr] = avail.times.split(" - ")
+    const start = parseHour(startStr)
+    const end = parseHour(endStr)
+    const day = abbr[avail.day] ?? avail.day.slice(0, 3)
+    for (let h = start; h < end; h++) {
+      const period = h >= 12 ? "PM" : "AM"
+      const display = h > 12 ? h - 12 : h === 0 ? 12 : h
+      slots.push(`${day} ${display}:00 ${period}`)
+    }
+  }
+  return slots
+}
+
 export function Dashboard() {
   const router = useRouter()
 
   // Original term selector modal state
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   
-  // New Add Faculty modal state
+  // Smart faculty assignment modal state
   const [isAssignFacultyOpen, setIsAssignFacultyOpen] = React.useState(false)
   const [selectedFaculty, setSelectedFaculty] = React.useState("")
   const [selectedSubject, setSelectedSubject] = React.useState("")
+  const [selectedTimeSlot, setSelectedTimeSlot] = React.useState("")
+
+  // Reset time slot whenever the faculty selection changes
+  React.useEffect(() => { setSelectedTimeSlot("") }, [selectedFaculty])
 
   const [viewState, setViewState] = React.useState<"dashboard" | "details">("dashboard")
   
@@ -46,14 +164,31 @@ export function Dashboard() {
 
   const [activeDepartment, setActiveDepartment] = React.useState<string>("Faculty of Applied Science and Technology")
 
-  const [assignedFaculty, setAssignedFaculty] = React.useState([
-    { id: "f1", name: "Kyra Smith", course: "Software Engineering", time: "Mon/Wed 10:00 AM", load: "Full-Time" },
-    { id: "f2", name: "John Doe", course: "Data Structures", time: "Tue/Thu 2:00 PM", load: "Part-Time" },
-    { id: "f3", name: "Alice Johnson", course: "Web Development", time: "Fri 9:00 AM", load: "Full-Time" },
-    { id: "f4", name: "Bob Martin", course: "Database Management", time: "Mon/Wed 1:00 PM", load: "Part-Time" },
-    { id: "f5", name: "Eve Davis", course: "Network Security", time: "Tue/Thu 10:00 AM", load: "Full-Time" },
-    { id: "", name: "Michael Chang", course: "Machine Learning", time: "Mon/Wed 3:00 PM", load: "Full-Time" },
-  ])
+  const [assignedFaculty, setAssignedFaculty] = React.useState<AssignmentRecord[]>(() => {
+    if (typeof window === "undefined") return defaultAssignments
+    try {
+      const stored = localStorage.getItem(ASSIGNMENT_STORAGE_KEY)
+      return stored ? (JSON.parse(stored) as AssignmentRecord[]) : defaultAssignments
+    } catch {
+      return defaultAssignments
+    }
+  })
+
+  // Persist assignments to localStorage whenever they change
+  React.useEffect(() => {
+    localStorage.setItem(ASSIGNMENT_STORAGE_KEY, JSON.stringify(assignedFaculty))
+  }, [assignedFaculty])
+
+  // Re-sync when the faculty page updates status in another tab
+  React.useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === ASSIGNMENT_STORAGE_KEY && e.newValue) {
+        try { setAssignedFaculty(JSON.parse(e.newValue)) } catch { /* ignore */ }
+      }
+    }
+    window.addEventListener("storage", onStorage)
+    return () => window.removeEventListener("storage", onStorage)
+  }, [])
 
   const departments = [
     "Faculty of Applied Science and Technology",
@@ -69,31 +204,38 @@ export function Dashboard() {
     setIsDialogOpen(true)
   }
 
-  const handleGoToDetails = (e: React.FormEvent) => {
+  const handleGoToDetails = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsDialogOpen(false)
     setViewState("details")
   }
 
-  const handleAddFacultySubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Mock randomly fetching a time
-    const mockTimes = ["Mon/Wed 10:00 AM", "Tue/Thu 2:00 PM", "Fri 9:00 AM", "Mon/Wed 1:00 PM", "Tue/Thu 10:00 AM", "Fri 1:00 PM"];
-    const randomTime = mockTimes[Math.floor(Math.random() * mockTimes.length)];
-    
+  const handleAddFacultySubmit = () => {
+    const roster = facultyRoster.find(f => f.name === selectedFaculty)
     setAssignedFaculty(prev => [...prev, {
-      id: "",
-      name: selectedFaculty || "Selected Professor",
-      course: selectedSubject || "Assigned Subject",
-      time: randomTime,
-      load: "Full-Time"
+      assignmentId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: roster?.id ?? "",
+      name: selectedFaculty,
+      course: selectedSubject,
+      time: selectedTimeSlot,
+      load: roster?.employmentType ?? "Full-Time",
+      status: "Pending" as const,
     }])
-    
     setIsAssignFacultyOpen(false)
     setSelectedFaculty("")
     setSelectedSubject("")
+    setSelectedTimeSlot("")
   }
+
+  // Derived values for the smart assignment dialog
+  const eligibleFaculty = selectedSubject
+    ? facultyRoster.filter(f => f.taughtSubjects.includes(selectedSubject))
+    : facultyRoster
+
+  const selectedFacultyEntry = facultyRoster.find(f => f.name === selectedFaculty)
+  const availableTimeSlots = selectedFacultyEntry
+    ? generateTimeSlots(selectedFacultyEntry.availability)
+    : []
 
   const renderContent = () => {
     if (viewState === "details") {
@@ -142,9 +284,23 @@ export function Dashboard() {
                         {teacher.name}
                       </CardTitle>
                     </div>
-                    <Badge variant={teacher.load === "Full-Time" ? "default" : "secondary"} className="font-medium shadow-none">
-                      {teacher.load}
-                    </Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant={teacher.load === "Full-Time" ? "default" : "secondary"} className="font-medium shadow-none">
+                        {teacher.load}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] px-1.5 py-0 h-4 font-semibold border-0 ${
+                          teacher.status === "Assigned"
+                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                            : teacher.status === "Rejected"
+                            ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                            : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        }`}
+                      >
+                        {teacher.status === "Assigned" ? "Assigned" : teacher.status === "Rejected" ? "Rejected" : "Pending"}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-4">
@@ -407,66 +563,205 @@ export function Dashboard() {
       </Dialog>
 
 
-      <Dialog open={isAssignFacultyOpen} onOpenChange={setIsAssignFacultyOpen}>
-        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden border-border/80 shadow-lg rounded-2xl">
-          <div className="p-6 bg-muted/10 border-b border-border/60">
+      <Dialog open={isAssignFacultyOpen} onOpenChange={(open) => {
+        setIsAssignFacultyOpen(open)
+        if (!open) { setSelectedFaculty(""); setSelectedSubject(""); setSelectedTimeSlot("") }
+      }}>
+        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden border-border/80 shadow-lg rounded-2xl flex flex-col max-h-[90vh]">
+          {/* Header */}
+          <div className="p-6 bg-muted/10 border-b border-border/60 shrink-0">
             <DialogHeader className="mb-0">
               <DialogTitle className="text-2xl flex items-center gap-3 font-bold">
                 <div className="bg-primary/10 p-2.5 rounded-xl text-primary shadow-sm">
                   <UserPlusIcon className="size-5" />
                 </div>
-                Assign Professor to Subject
+                Assign Faculty to Subject
               </DialogTitle>
-              <DialogDescription className="pt-3 text-[15px] font-medium text-muted-foreground/80">
-                Select a faculty member and the subject they will teach. The system will automatically fetch their available teaching times.
+              <DialogDescription className="pt-2 text-sm text-muted-foreground/80">
+                Faculty ranked by seniority — higher seniority gets first preference. Part-time faculty have a reduced weekly cap.
               </DialogDescription>
             </DialogHeader>
           </div>
-          <div className="p-6">
-            <form onSubmit={handleAddFacultySubmit} className="space-y-6">
-              <FieldGroup className="space-y-5">
-                <Field className="space-y-2.5">
-                  <FieldLabel htmlFor="faculty" className="font-semibold text-foreground/80">Select Faculty</FieldLabel>
-                  <Select value={selectedFaculty} onValueChange={(val) => setSelectedFaculty(val || "")} required>
-                    <SelectTrigger id="faculty" className="h-11 bg-muted/30 border-border/60 rounded-xl">
-                      <SelectValue placeholder="Choose a professor..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl border-border/80 shadow-md">
-                      <SelectGroup className="p-1">
-                        {["Dr. Sarah Jenkins", "Prof. Mark Thompson", "Dr. Emily Chen", "Dr. Robert Wilson", "Prof. Lisa Rodriguez"].map(f => (
-                          <SelectItem key={f} value={f} className="rounded-lg mb-0.5 cursor-pointer focus:bg-primary/10 focus:text-primary">{f}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
 
-                <Field className="space-y-2.5">
-                  <FieldLabel htmlFor="subject" className="font-semibold text-foreground/80">Select Subject</FieldLabel>
-                  <Select value={selectedSubject} onValueChange={(val) => setSelectedSubject(val || "")} required>
-                    <SelectTrigger id="subject" className="h-11 bg-muted/30 border-border/60 rounded-xl">
-                      <SelectValue placeholder="Choose a subject..." />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl border-border/80 shadow-md">
-                      <SelectGroup className="p-1">
-                        {["Advanced Algorithms", "Computer Networks", "Database Management", "Operating Systems", "Cloud Computing"].map(s => (
-                          <SelectItem key={s} value={s} className="rounded-lg mb-0.5 cursor-pointer focus:bg-primary/10 focus:text-primary">{s}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </FieldGroup>
-              
-              <DialogFooter className="mt-8 gap-2 sm:gap-0 pt-4 border-t border-border/40">
-                <Button type="button" variant="ghost" onClick={() => setIsAssignFacultyOpen(false)} className="rounded-xl font-medium hover:bg-muted">
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={!selectedFaculty || !selectedSubject} className="rounded-xl font-semibold shadow-sm px-6">
-                  Add Faculty <ChevronRightIcon className="ml-2 size-4" />
-                </Button>
-              </DialogFooter>
-            </form>
+          {/* Scrollable body */}
+          <div className="overflow-y-auto flex-1 p-6 space-y-6">
+
+            {/* Subject picker */}
+            <Field className="space-y-2.5">
+              <FieldLabel htmlFor="subject" className="font-semibold text-foreground/80">Subject</FieldLabel>
+              <Select value={selectedSubject} onValueChange={(val) => setSelectedSubject(val ?? "")}>
+                <SelectTrigger id="subject" className="h-11 bg-muted/30 border-border/60 rounded-xl">
+                  <SelectValue placeholder="Choose a subject to assign..." />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-border/80 shadow-md">
+                  <SelectGroup className="p-1">
+                    {["Advanced Algorithms", "Computer Networks", "Database Management", "Operating Systems", "Cloud Computing", "Software Engineering", "Web Development"].map(s => (
+                      <SelectItem key={s} value={s} className="rounded-lg mb-0.5 cursor-pointer focus:bg-primary/10 focus:text-primary">{s}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {/* Priority faculty list */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <FieldLabel className="font-semibold text-foreground/80">Faculty Priority Queue</FieldLabel>
+                <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">sorted by seniority</span>
+              </div>
+
+              <div className="space-y-2 mt-1">
+                {eligibleFaculty.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 py-8 text-center text-sm text-muted-foreground">
+                    No faculty have previously taught <span className="font-medium text-foreground">{selectedSubject}</span>.
+                  </div>
+                ) : eligibleFaculty.map((f, index) => {
+                  const coursesAssigned = assignedFaculty.filter(a => a.name === f.name).length
+                  const usedHours = coursesAssigned * HOURS_PER_COURSE
+                  const remainingHours = f.maxHoursPerWeek - usedHours
+                  const capacityPct = Math.min((usedHours / f.maxHoursPerWeek) * 100, 100)
+                  const noAvailability = f.availability.length === 0
+                  const atCapacity = remainingHours <= 0
+                  const isDisabled = noAvailability || atCapacity
+                  const isSelected = selectedFaculty === f.name
+                  return (
+                    <div
+                      key={f.id}
+                      onClick={() => !isDisabled && setSelectedFaculty(isSelected ? "" : f.name)}
+                      className={[
+                        "relative rounded-xl border p-4 transition-all",
+                        isSelected
+                          ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20"
+                          : isDisabled
+                          ? "border-border/30 bg-muted/20 opacity-50 cursor-not-allowed"
+                          : "border-border/60 hover:border-primary/40 hover:bg-muted/20 cursor-pointer",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Priority rank badge */}
+                        <div className={[
+                          "shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
+                          index === 0 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                          index === 1 ? "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300" :
+                          "bg-muted text-muted-foreground",
+                        ].join(" ")}>
+                          {index + 1}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          {/* Name row */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-sm">{f.name}</span>
+                            <Badge
+                              variant={f.employmentType === "Full-Time" ? "default" : "secondary"}
+                              className="text-[10px] px-1.5 py-0 h-4 font-medium shadow-none"
+                            >
+                              {f.employmentType}
+                            </Badge>
+                            {noAvailability && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium text-muted-foreground">
+                                No Availability
+                              </Badge>
+                            )}
+                            {atCapacity && !noAvailability && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium text-red-600 border-red-300">
+                                At Capacity
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Role + seniority */}
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {f.role} · <span className="font-medium">{f.seniority} yrs</span> seniority
+                          </div>
+
+                          {/* Available days */}
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {f.availability.length > 0
+                              ? f.availability.map(a => (
+                                  <span key={a.day} className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium">
+                                    {a.day.slice(0, 3)}
+                                  </span>
+                                ))
+                              : <span className="text-[10px] text-muted-foreground italic">Not available this term</span>
+                            }
+                          </div>
+
+                          {/* Capacity bar */}
+                          <div className="mt-3">
+                            <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                              <span>{usedHours}h used / {f.maxHoursPerWeek}h max/week</span>
+                              <span className={remainingHours <= 0 ? "text-red-500 font-semibold" : remainingHours <= 3 ? "text-amber-500 font-semibold" : "text-emerald-600 font-semibold"}>
+                                {remainingHours > 0 ? `${remainingHours}h remaining` : "Full"}
+                              </span>
+                            </div>
+                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className={[
+                                  "h-full rounded-full transition-all",
+                                  capacityPct >= 100 ? "bg-red-500" :
+                                  capacityPct >= 70  ? "bg-amber-500" :
+                                  "bg-emerald-500",
+                                ].join(" ")}
+                                style={{ width: `${capacityPct}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Time slot picker — shown only after a faculty is selected */}
+            {selectedFaculty && (
+              <div className="space-y-2.5">
+                <FieldLabel className="font-semibold text-foreground/80">
+                  Available Time Slots
+                  <span className="ml-2 text-[11px] text-muted-foreground font-normal">for {selectedFaculty}</span>
+                </FieldLabel>
+                <div className="grid grid-cols-3 gap-2">
+                  {availableTimeSlots.map(slot => (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => setSelectedTimeSlot(selectedTimeSlot === slot ? "" : slot)}
+                      className={[
+                        "text-xs py-2.5 px-2 rounded-xl border text-left transition-all flex items-center gap-1.5",
+                        selectedTimeSlot === slot
+                          ? "border-primary bg-primary/5 text-primary font-semibold shadow-sm"
+                          : "border-border/60 hover:border-primary/40 hover:bg-muted/20 text-foreground/80",
+                      ].join(" ")}
+                    >
+                      <ClockIcon className="size-3 shrink-0 opacity-60" />
+                      {slot}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-6 pt-4 border-t border-border/40 shrink-0 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setIsAssignFacultyOpen(false)}
+              className="rounded-xl font-medium hover:bg-muted"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!selectedFaculty || !selectedSubject || !selectedTimeSlot}
+              onClick={handleAddFacultySubmit}
+              className="rounded-xl font-semibold shadow-sm px-6"
+            >
+              Assign Faculty <ChevronRightIcon className="ml-2 size-4" />
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

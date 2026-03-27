@@ -7,8 +7,9 @@ import {
   MoreHorizontalIcon, MailIcon, PhoneIcon, CheckCircle2Icon,
   ArrowLeftIcon, BookOpenIcon, ClockIcon, MapPinIcon,
   BriefcaseIcon, ChevronRightIcon, CalendarIcon, HistoryIcon,
-  UserPlusIcon
+  UserPlusIcon, InboxIcon, CheckIcon, XIcon,
 } from "lucide-react"
+import { ASSIGNMENT_STORAGE_KEY, type AssignmentRecord } from "@/components/dashboard"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -136,6 +137,34 @@ function FacultyPageInner() {
       }
     }
   }, [searchParams])
+
+  // Assignment requests from localStorage (written by the dashboard)
+  const [allAssignments, setAllAssignments] = React.useState<AssignmentRecord[]>(() => {
+    if (typeof window === "undefined") return []
+    try {
+      const stored = localStorage.getItem(ASSIGNMENT_STORAGE_KEY)
+      return stored ? JSON.parse(stored) : []
+    } catch { return [] }
+  })
+
+  // Re-sync when dashboard writes a new assignment in another tab
+  React.useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === ASSIGNMENT_STORAGE_KEY && e.newValue) {
+        try { setAllAssignments(JSON.parse(e.newValue)) } catch { /* ignore */ }
+      }
+    }
+    window.addEventListener("storage", onStorage)
+    return () => window.removeEventListener("storage", onStorage)
+  }, [])
+
+  const updateAssignmentStatus = (assignmentId: string, status: "Assigned" | "Rejected") => {
+    setAllAssignments(prev => {
+      const updated = prev.map(a => a.assignmentId === assignmentId ? { ...a, status } : a)
+      localStorage.setItem(ASSIGNMENT_STORAGE_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }
 
   // Add Faculty dialog state
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false)
@@ -292,6 +321,58 @@ function FacultyPageInner() {
 
           {/* Right Column */}
           <div className="flex flex-col gap-6 xl:col-span-2">
+
+            {/* Pending Assignment Requests */}
+            {(() => {
+              const pending = allAssignments.filter(
+                a => a.id === selectedFaculty.id && a.status === "Pending"
+              )
+              if (pending.length === 0) return null
+              return (
+                <Card className="shadow-sm border-amber-300/60 bg-amber-50/30 dark:bg-amber-900/10 dark:border-amber-700/40">
+                  <CardHeader className="pb-3 border-b border-amber-200/60 dark:border-amber-700/30 flex flex-row items-center justify-between">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                      <InboxIcon className="size-5 text-amber-500" />
+                      Pending Requests
+                    </CardTitle>
+                    <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-0 font-semibold">
+                      {pending.length} awaiting response
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="pt-4 space-y-3">
+                    {pending.map(req => (
+                      <div key={req.assignmentId} className="flex items-center justify-between gap-4 p-4 rounded-xl border border-amber-200/60 dark:border-amber-700/30 bg-background">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-foreground truncate">{req.course}</p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                            <ClockIcon className="size-3 shrink-0" />
+                            {req.time}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateAssignmentStatus(req.assignmentId, "Rejected")}
+                            className="rounded-lg border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 font-medium gap-1.5"
+                          >
+                            <XIcon className="size-3.5" /> Decline
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => updateAssignmentStatus(req.assignmentId, "Assigned")}
+                            className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-1.5 shadow-sm"
+                          >
+                            <CheckIcon className="size-3.5" /> Accept
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )
+            })()}
+
             <Card className="shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border-border/60 bg-card">
               <CardHeader className="pb-3 border-b border-border/40 flex flex-row items-center justify-between">
                 <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
