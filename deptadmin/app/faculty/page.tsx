@@ -7,7 +7,7 @@ import {
   MoreHorizontalIcon, MailIcon, PhoneIcon, CheckCircle2Icon,
   ArrowLeftIcon, BookOpenIcon, ClockIcon, MapPinIcon,
   BriefcaseIcon, ChevronRightIcon, CalendarIcon, HistoryIcon,
-  UserPlusIcon, InboxIcon, CheckIcon, XIcon,
+  UserPlusIcon, InboxIcon, CheckIcon, XIcon, PaperclipIcon, ImageIcon, SendIcon,
 } from "lucide-react"
 import { ASSIGNMENT_STORAGE_KEY, type AssignmentRecord } from "@/components/dashboard"
 
@@ -166,6 +166,50 @@ function FacultyPageInner() {
     })
   }
 
+  // Message dialog state
+  const [isMessageOpen, setIsMessageOpen] = React.useState(false)
+  const [messageText, setMessageText] = React.useState("")
+  const [attachments, setAttachments] = React.useState<{ name: string; url: string; type: string }[]>([])
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const messagesEndRef = React.useRef<HTMLDivElement>(null)
+  const [messages, setMessages] = React.useState<{
+    id: number; sender: string; isAdmin: boolean; text: string; time: string;
+    attachments?: { name: string; url: string; type: string }[]
+  }[]>([
+    { id: 1, sender: "Admin User", isAdmin: true, text: "Hi Kyra, just checking in — are you available to take on an extra section for Winter 2025?", time: "Mar 20, 9:14 AM" },
+    { id: 2, sender: "Kyra Smith", isAdmin: false, text: "Hi! Yes, I should be able to fit one more section in depending on the schedule. What course are you thinking?", time: "Mar 20, 10:32 AM" },
+    { id: 3, sender: "Admin User", isAdmin: true, text: "We're looking at SWE-350 Web Development II on Fridays. Would that work for you?", time: "Mar 20, 11:05 AM" },
+  ])
+
+  React.useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    const previews = files.map(file => ({
+      name: file.name,
+      url: URL.createObjectURL(file),
+      type: file.type,
+    }))
+    setAttachments(prev => [...prev, ...previews])
+    e.target.value = ""
+  }
+
+  const handleSendMessage = () => {
+    if (!messageText.trim() && attachments.length === 0) return
+    setMessages(prev => [...prev, {
+      id: prev.length + 1,
+      sender: "Admin User",
+      isAdmin: true,
+      text: messageText.trim(),
+      attachments: attachments.length > 0 ? attachments : undefined,
+      time: new Date().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+    }])
+    setMessageText("")
+    setAttachments([])
+  }
+
   // Add Faculty dialog state
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false)
   const [form, setForm] = React.useState({
@@ -238,7 +282,7 @@ function FacultyPageInner() {
 
           <div className="flex gap-2">
             <Button variant="outline" className="rounded-xl font-medium"><MoreHorizontalIcon className="size-4" /></Button>
-            <Button className="rounded-xl font-medium px-6 shadow-md"><MailIcon className="mr-2 size-4" /> Message</Button>
+            <Button className="rounded-xl font-medium px-6 shadow-md" onClick={() => setIsMessageOpen(true)}><MailIcon className="mr-2 size-4" /> Message</Button>
           </div>
         </div>
 
@@ -468,6 +512,145 @@ function FacultyPageInner() {
             </Card>
           </div>
         </div>
+
+        {/* Message Dialog */}
+        <Dialog open={isMessageOpen} onOpenChange={(open) => { setIsMessageOpen(open); if (!open) setMessageText("") }}>
+          <DialogContent className="sm:max-w-2xl p-0 gap-0 overflow-hidden rounded-2xl shadow-xl [&>button]:top-4 [&>button]:right-4 h-[600px] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-border/50 bg-muted/30 pr-14 shrink-0">
+              <div className="size-9 rounded-full bg-gradient-to-tr from-primary/80 to-primary/40 flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0">
+                {selectedFaculty.name.split(" ").map(n => n[0]).join("")}
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground leading-tight">
+                  Admin User &amp; {selectedFaculty.name}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0">
+                  {selectedFaculty.email}
+                </DialogDescription>
+              </div>
+            </div>
+
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 bg-[#F8FAFC] dark:bg-zinc-950" >
+              {/* Date separator */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-border/60" />
+                <span className="text-xs text-muted-foreground font-medium px-2">Mar 20</span>
+                <div className="flex-1 h-px bg-border/60" />
+              </div>
+
+              {messages.map((msg) => (
+                <div key={msg.id} className="flex items-start gap-3">
+                  <div className={`size-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
+                    msg.isAdmin
+                      ? "bg-gradient-to-tr from-indigo-500 to-purple-500 text-white"
+                      : "bg-gradient-to-tr from-primary/80 to-primary/40 text-primary-foreground"
+                  }`}>
+                    {msg.sender.split(" ").map(n => n[0]).join("")}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2 mb-1">
+                      <span className="text-sm font-semibold text-foreground">{msg.sender}</span>
+                      <span className="text-xs text-muted-foreground">{msg.time}</span>
+                    </div>
+                    {msg.text && (
+                      <div className="bg-background rounded-xl rounded-tl-sm border border-border/50 px-4 py-3 text-sm text-foreground shadow-sm">
+                        {msg.text}
+                      </div>
+                    )}
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {msg.attachments.map((att, i) =>
+                          att.type.startsWith("image/") ? (
+                            <img key={i} src={att.url} alt={att.name} className="max-h-40 max-w-xs rounded-xl border border-border/50 shadow-sm object-cover" />
+                          ) : (
+                            <div key={i} className="flex items-center gap-2 bg-background border border-border/50 rounded-xl px-3 py-2 text-sm shadow-sm">
+                              <PaperclipIcon className="size-4 text-muted-foreground shrink-0" />
+                              <span className="font-medium text-foreground truncate max-w-[180px]">{att.name}</span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Area */}
+            <div className="shrink-0 border-t border-border/50 bg-background px-4 pt-3 pb-4">
+              {/* Attachment previews */}
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {attachments.map((att, i) => (
+                    <div key={i} className="relative group">
+                      {att.type.startsWith("image/") ? (
+                        <img src={att.url} alt={att.name} className="h-16 w-16 rounded-lg object-cover border border-border/50" />
+                      ) : (
+                        <div className="flex items-center gap-2 bg-muted/50 border border-border/50 rounded-lg px-3 py-2 text-xs font-medium text-foreground">
+                          <PaperclipIcon className="size-3.5 text-muted-foreground" />
+                          <span className="max-w-32 truncate">{att.name}</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                        className="absolute -top-1.5 -right-1.5 size-4 rounded-full bg-foreground text-background flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <XIcon className="size-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Toolbar + textarea */}
+              <div className="rounded-xl border border-border/60 bg-muted/30 overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50 transition-colors">
+                <textarea
+                  value={messageText}
+                  onChange={e => setMessageText(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendMessage() } }}
+                  placeholder={`Message ${selectedFaculty.name}...`}
+                  rows={2}
+                  className="w-full resize-none bg-transparent px-4 pt-3 pb-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                />
+                <div className="flex items-center justify-between px-3 pb-2">
+                  <div className="flex items-center gap-1">
+                    {/* Hidden file inputs */}
+                    <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" className="hidden" onChange={handleFileSelect} />
+                    <button
+                      type="button"
+                      title="Attach file"
+                      onClick={() => { if (fileInputRef.current) { fileInputRef.current.accept = "*/*"; fileInputRef.current.click() } }}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      <PaperclipIcon className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Attach image"
+                      onClick={() => { if (fileInputRef.current) { fileInputRef.current.accept = "image/*"; fileInputRef.current.click() } }}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      <ImageIcon className="size-4" />
+                    </button>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!messageText.trim() && attachments.length === 0}
+                    onClick={handleSendMessage}
+                    className="rounded-lg h-8 px-4 font-semibold shadow-sm gap-1.5"
+                  >
+                    <SendIcon className="size-3.5" /> Send
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1.5 px-1">Enter to send · Shift+Enter for new line</p>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
