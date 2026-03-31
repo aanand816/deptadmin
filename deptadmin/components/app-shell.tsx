@@ -74,10 +74,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="space-y-1.5">
             <p className="px-3 text-[11px] font-bold text-muted-foreground/70 uppercase tracking-widest mb-3">System</p>
-            <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium rounded-xl">
-              <SettingsIcon className="size-4.5" />
-              Settings
-            </Button>
+            <Link href="/settings" onClick={() => setIsSidebarOpen(false)}>
+              <Button variant={pathname === "/settings" ? "secondary" : "ghost"} className={`w-full justify-start gap-3 rounded-xl transition-all ${pathname === "/settings" ? "bg-primary/10 text-primary hover:bg-primary/15 font-semibold" : "text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium"}`}>
+                <SettingsIcon className="size-4.5" />
+                Settings
+              </Button>
+            </Link>
             <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium rounded-xl group">
               <BellIcon className="size-4.5 group-hover:animate-wiggle" />
               Notifications
