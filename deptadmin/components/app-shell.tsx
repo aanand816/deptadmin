@@ -2,17 +2,25 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { 
-  GraduationCapIcon, LayoutDashboardIcon, UsersIcon, BookOpenIcon, 
-  CalendarIcon, SettingsIcon, BellIcon, MenuIcon, XIcon, MoreHorizontalIcon,
-  SearchIcon
+import { usePathname, useRouter } from "next/navigation"
+import {
+  GraduationCapIcon, LayoutDashboardIcon, UsersIcon, BookOpenIcon,
+  CalendarIcon, SettingsIcon, BellIcon, MenuIcon, XIcon,
+  SearchIcon, LogOutIcon
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+interface AppShellUser {
+  id: number
+  name: string
+  email: string
+  role: string
+}
+
+export function AppShell({ children, user }: { children: React.ReactNode; user?: AppShellUser }) {
+  const router = useRouter()
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false)
   const pathname = usePathname()
 
@@ -23,14 +31,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     { name: 'Facilities', href: '/scheduling', icon: CalendarIcon },
   ]
 
-  // Find current path name for the breadcrumb
   const currentNav = navigation.find(n => n.href === pathname) || { name: 'Dashboard' }
+
+  const initials = user?.name
+    ? user.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
+    : "AD"
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" })
+    router.push("/login")
+    router.refresh()
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-zinc-950 flex font-sans text-foreground selection:bg-primary/20">
       {/* Sidebar Overlay (Mobile) */}
       {isSidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-40 bg-zinc-950/40 backdrop-blur-sm lg:hidden transition-opacity"
           onClick={() => setIsSidebarOpen(false)}
         />
@@ -47,7 +64,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <XIcon className="size-5" />
           </Button>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto py-6 px-4 space-y-8 scrollbar-thin scrollbar-thumb-border">
           <div className="space-y-1.5">
             <p className="px-3 text-[11px] font-bold text-muted-foreground/70 uppercase tracking-widest mb-3">Main Menu</p>
@@ -56,11 +73,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               const Icon = item.icon
               return (
                 <Link key={item.name} href={item.href} onClick={() => setIsSidebarOpen(false)}>
-                  <Button 
-                    variant={isActive ? "secondary" : "ghost"} 
+                  <Button
+                    variant={isActive ? "secondary" : "ghost"}
                     className={`w-full justify-start gap-3 rounded-xl transition-all ${
-                      isActive 
-                        ? "bg-primary/10 text-primary hover:bg-primary/15 font-semibold" 
+                      isActive
+                        ? "bg-primary/10 text-primary hover:bg-primary/15 font-semibold"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/60 font-medium"
                     }`}
                   >
@@ -88,31 +105,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <div className="p-4 border-t border-border/60 bg-muted/10">
-          <button className="flex items-center gap-3 w-full p-2.5 hover:bg-background border border-transparent hover:border-border/60 rounded-xl transition-all text-left shadow-sm hover:shadow group">
+        <div className="p-4 border-t border-border/60 bg-muted/10 space-y-2">
+          <div className="flex items-center gap-3 w-full p-2.5 rounded-xl bg-background border border-border/60 shadow-sm">
             <div className="size-9 rounded-full bg-gradient-to-tr from-indigo-500 relative to-purple-500 flex items-center justify-center text-white font-bold shrink-0 shadow-inner">
-              AD
+              {initials}
               <span className="absolute bottom-0 right-0 size-2.5 bg-emerald-500 border-2 border-background rounded-full"></span>
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-bold truncate text-foreground/90 group-hover:text-foreground transition-colors">Admin User</p>
-              <p className="text-xs text-muted-foreground truncate font-medium">admin@archie.edu</p>
+              <p className="text-sm font-bold truncate text-foreground/90">{user?.name ?? "Admin User"}</p>
+              <p className="text-xs text-muted-foreground truncate font-medium">{user?.email ?? "admin@archie.edu"}</p>
             </div>
-            <MoreHorizontalIcon className="size-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors shrink-0" />
-          </button>
+          </div>
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10 font-medium rounded-xl"
+            onClick={handleLogout}
+          >
+            <LogOutIcon className="size-4" />
+            Sign out
+          </Button>
         </div>
       </aside>
 
       {/* Main Container */}
       <div className="flex-1 flex flex-col lg:pl-[280px] transition-all duration-300 ease-in-out min-w-0">
-        
+
         {/* Top Navbar */}
         <header className="sticky top-0 z-30 h-16 bg-background/80 backdrop-blur-xl border-b border-border/60 flex items-center justify-between px-4 sm:px-8 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="lg:hidden hover:bg-muted/60 -ml-2" onClick={() => setIsSidebarOpen(true)}>
               <MenuIcon className="size-5" />
             </Button>
-            
+
             <div className="hidden sm:flex items-center text-sm font-medium text-muted-foreground gap-2">
               <span className="hover:text-foreground cursor-pointer transition-colors px-2 py-1 rounded-md hover:bg-muted/50">Admin</span>
               <span className="text-muted-foreground/40">/</span>
@@ -128,12 +152,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <BellIcon className="size-5" />
               <span className="absolute top-2 right-2.5 size-2 bg-red-500 rounded-full border-2 border-background"></span>
             </Button>
-            <div className="pl-4 border-l border-border/60 hidden sm:block ml-1">
-              <div className="flex items-center gap-2.5 cursor-pointer hover:opacity-80 transition-opacity p-1 rounded-full hover:bg-muted/50">
-                <div className="size-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                  AD
-                </div>
+            <div className="pl-4 border-l border-border/60 hidden sm:flex items-center gap-2 ml-1">
+              <div className="size-8 rounded-full bg-linear-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                {initials}
               </div>
+              <button
+                onClick={handleLogout}
+                className="text-xs text-muted-foreground hover:text-destructive transition-colors font-medium"
+                title="Sign out"
+              >
+                <LogOutIcon className="size-4" />
+              </button>
             </div>
           </div>
         </header>
