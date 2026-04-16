@@ -85,8 +85,12 @@ export function Dashboard() {
   const [searchQuery, setSearchQuery] = React.useState("")
 
   // ── Assignments — no default fake data ────────────────────────────────────
+  // ── Assignments ────────────────────────────────────────────────────────────
   const [assignedFaculty, setAssignedFaculty] = React.useState<AssignmentRecord[]>([])
+  // Guard: don't let the write effect fire on the initial mount render
+  const hasMountedRef = React.useRef(false)
 
+  // READ on mount
   React.useEffect(() => {
     try {
       const stored = localStorage.getItem(ASSIGNMENT_STORAGE_KEY)
@@ -96,20 +100,14 @@ export function Dashboard() {
     }
   }, [])
 
+  // WRITE only after mount — never on first render with empty array
   React.useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true
+      return  // skip the very first run, data isn't loaded yet
+    }
     localStorage.setItem(ASSIGNMENT_STORAGE_KEY, JSON.stringify(assignedFaculty))
   }, [assignedFaculty])
-
-  React.useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === ASSIGNMENT_STORAGE_KEY && e.newValue) {
-        try { setAssignedFaculty(JSON.parse(e.newValue)) } catch { }
-      }
-    }
-    window.addEventListener("storage", onStorage)
-    return () => window.removeEventListener("storage", onStorage)
-  }, [])
-
   // ── Facilities ─────────────────────────────────────────────────────────────
   const [facilityStats, setFacilityStats] = React.useState({
     total: 0, available: 0, occupied: 0, maintenance: 0,
@@ -375,8 +373,17 @@ export function Dashboard() {
                     </div>
                   </div>
                   <div className="flex gap-3 pt-3 mt-4 border-t border-border/40">
-                    <Button variant="outline" size="sm" className="w-full font-medium hover:bg-muted/50 rounded-lg">Edit</Button>
-                    <Button size="sm" className="w-full font-medium shadow-sm hover:shadow rounded-lg">Reassign</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full font-medium hover:bg-muted/50 rounded-lg"
+                      onClick={() => router.push(`/faculty?id=${teacher.id}`)}
+                    >
+                      View Profile
+                    </Button>
+                    <Button size="sm" className="w-full font-medium shadow-sm hover:shadow rounded-lg">
+                      Reassign
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -523,7 +530,16 @@ export function Dashboard() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right pr-6">
-                            <Button variant="ghost" size="sm" className="gap-1 font-medium bg-background text-foreground shadow-sm border border-border/50 rounded-lg">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1 font-medium bg-background text-foreground shadow-sm border border-border/50 rounded-lg"
+                              onClick={() => {
+                                if (faculty.id) {
+                                  router.push(`/faculty?id=${faculty.id}`)
+                                }
+                              }}
+                            >
                               Open <ChevronRightIcon className="size-3 text-muted-foreground" />
                             </Button>
                           </TableCell>
