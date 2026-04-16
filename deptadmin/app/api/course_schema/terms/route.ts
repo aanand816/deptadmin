@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { courseQuery } from "@/lib/db"
 
 export async function GET(req: NextRequest) {
   try {
-    const res = await query(`
+    const res = await courseQuery(`
       SELECT id, semester_id, course_id, created_at
       FROM course_schema.terms
       ORDER BY id
