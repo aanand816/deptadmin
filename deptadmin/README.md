@@ -188,4 +188,4 @@ vercel --prod
 
 ## Team
 
-**Frin Patel** — Department Admin module. Built the dashboard, faculty assignment workflow, course catalog, facilities integration, auth system, and handled deployment.
+**Frin Patel, Dev Patel, Khush Santoki, Aanand Lnu, Rajkamal Singh** 
