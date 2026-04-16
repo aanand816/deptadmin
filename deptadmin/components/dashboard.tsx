@@ -45,14 +45,6 @@ export type AssignmentRecord = {
   status: "Pending" | "Assigned" | "Rejected"
 }
 
-const defaultAssignments: AssignmentRecord[] = [
-  { assignmentId: "a1", id: "f1", name: "Kyra Smith", course: "Software Engineering", time: "Mon/Wed 10:00 AM", load: "Full-Time", status: "Assigned" },
-  { assignmentId: "a2", id: "f2", name: "John Doe", course: "Data Structures", time: "Tue/Thu 2:00 PM", load: "Part-Time", status: "Assigned" },
-  { assignmentId: "a3", id: "f3", name: "Alice Johnson", course: "Web Development", time: "Fri 9:00 AM", load: "Full-Time", status: "Assigned" },
-  { assignmentId: "a4", id: "f4", name: "Bob Martin", course: "Database Management", time: "Mon/Wed 1:00 PM", load: "Part-Time", status: "Assigned" },
-  { assignmentId: "a5", id: "f5", name: "Eve Davis", course: "Network Security", time: "Tue/Thu 10:00 AM", load: "Full-Time", status: "Assigned" },
-]
-
 const HOURS_PER_COURSE = 3
 
 type FacultyRosterEntry = {
@@ -64,85 +56,6 @@ type FacultyRosterEntry = {
   maxHoursPerWeek: number
   availability: { day: string; times: string }[]
   taughtSubjects: string[]
-}
-
-const facultyRoster: FacultyRosterEntry[] = [
-  {
-    id: "f1", name: "Kyra Smith", role: "Professor",
-    employmentType: "Full-Time", seniority: 15, maxHoursPerWeek: 18,
-    taughtSubjects: ["Software Engineering", "Web Development", "Cloud Computing", "Computer Networks"],
-    availability: [
-      { day: "Monday", times: "9:00 AM - 2:00 PM" },
-      { day: "Wednesday", times: "9:00 AM - 2:00 PM" },
-      { day: "Friday", times: "11:00 AM - 4:00 PM" },
-    ],
-  },
-  {
-    id: "f5", name: "Eve Davis", role: "Professor",
-    employmentType: "Full-Time", seniority: 12, maxHoursPerWeek: 18,
-    taughtSubjects: ["Digital Media Production", "Graphic Design", "UI/UX Design"],
-    availability: [
-      { day: "Tuesday", times: "9:00 AM - 1:00 PM" },
-      { day: "Thursday", times: "9:00 AM - 1:00 PM" },
-      { day: "Friday", times: "9:00 AM - 1:00 PM" },
-    ],
-  },
-  {
-    id: "f2", name: "John Doe", role: "Associate Professor",
-    employmentType: "Full-Time", seniority: 10, maxHoursPerWeek: 18,
-    taughtSubjects: ["Advanced Algorithms", "Database Management", "Operating Systems", "Computer Networks"],
-    availability: [],
-  },
-  {
-    id: "f3", name: "Alice Johnson", role: "Lecturer",
-    employmentType: "Part-Time", seniority: 5, maxHoursPerWeek: 9,
-    taughtSubjects: ["Intro to Business", "Marketing 101", "Business Ethics"],
-    availability: [
-      { day: "Tuesday", times: "10:00 AM - 5:00 PM" },
-      { day: "Thursday", times: "10:00 AM - 5:00 PM" },
-    ],
-  },
-  {
-    id: "f4", name: "Bob Martin", role: "Adjunct Faculty",
-    employmentType: "Part-Time", seniority: 3, maxHoursPerWeek: 9,
-    taughtSubjects: ["Anatomy", "Clinical Practice", "Healthcare Ethics"],
-    availability: [
-      { day: "Monday", times: "1:00 PM - 6:00 PM" },
-      { day: "Wednesday", times: "1:00 PM - 6:00 PM" },
-    ],
-  },
-]
-
-function parseHour(timeStr: string): number {
-  const [time, period] = timeStr.trim().split(" ")
-  const h = parseInt(time.split(":")[0], 10)
-  if (period === "PM" && h !== 12) return h + 12
-  if (period === "AM" && h === 12) return 0
-  return h
-}
-
-function generateTimeSlots(availability: { day: string; times: string }[]): string[] {
-  const abbr: Record<string, string> = {
-    Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed",
-    Thursday: "Thu", Friday: "Fri", Saturday: "Sat", Sunday: "Sun",
-  }
-
-  const slots: string[] = []
-
-  for (const avail of availability) {
-    const [startStr, endStr] = avail.times.split(" - ")
-    const start = parseHour(startStr)
-    const end = parseHour(endStr)
-    const day = abbr[avail.day] ?? avail.day.slice(0, 3)
-
-    for (let h = start; h < end; h++) {
-      const period = h >= 12 ? "PM" : "AM"
-      const display = h > 12 ? h - 12 : h === 0 ? 12 : h
-      slots.push(`${day} ${display}:00 ${period}`)
-    }
-  }
-
-  return slots
 }
 
 function statusBadgeClasses(status: RoomStatus) {
@@ -171,9 +84,8 @@ export function Dashboard() {
   const [activeDepartment, setActiveDepartment] = React.useState<string>("Faculty of Applied Science and Technology")
   const [searchQuery, setSearchQuery] = React.useState("")
 
-  
-
-  const [assignedFaculty, setAssignedFaculty] = React.useState<AssignmentRecord[]>(defaultAssignments)
+  // ── Assignments — no default fake data ────────────────────────────────────
+  const [assignedFaculty, setAssignedFaculty] = React.useState<AssignmentRecord[]>([])
 
   React.useEffect(() => {
     try {
@@ -191,18 +103,16 @@ export function Dashboard() {
   React.useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === ASSIGNMENT_STORAGE_KEY && e.newValue) {
-        try { setAssignedFaculty(JSON.parse(e.newValue)) } catch {}
+        try { setAssignedFaculty(JSON.parse(e.newValue)) } catch { }
       }
     }
     window.addEventListener("storage", onStorage)
     return () => window.removeEventListener("storage", onStorage)
   }, [])
 
+  // ── Facilities ─────────────────────────────────────────────────────────────
   const [facilityStats, setFacilityStats] = React.useState({
-    total: 0,
-    available: 0,
-    occupied: 0,
-    maintenance: 0,
+    total: 0, available: 0, occupied: 0, maintenance: 0,
   })
   const [campuses, setCampuses] = React.useState<Campus[]>([])
   const [facilityRooms, setFacilityRooms] = React.useState<Room[]>([])
@@ -214,14 +124,9 @@ export function Dashboard() {
       try {
         setFacilityLoading(true)
         setFacilityError(null)
-
         const [
-          allRooms,
-          availableRooms,
-          occupiedRooms,
-          maintenanceRooms,
-          campusesRes,
-          recentRooms,
+          allRooms, availableRooms, occupiedRooms,
+          maintenanceRooms, campusesRes, recentRooms,
         ] = await Promise.all([
           getRooms({ limit: 1 }),
           getRooms({ status: "AVAILABLE", limit: 1 }),
@@ -230,7 +135,6 @@ export function Dashboard() {
           getCampuses(),
           getRooms({ limit: 6 }),
         ])
-
         setFacilityStats({
           total: allRooms.total,
           available: availableRooms.total,
@@ -245,10 +149,10 @@ export function Dashboard() {
         setFacilityLoading(false)
       }
     }
-
     loadFacilitiesOverview()
   }, [])
 
+  // ── Departments ────────────────────────────────────────────────────────────
   const [departments, setDepartments] = React.useState<string[]>([])
 
   React.useEffect(() => {
@@ -263,12 +167,11 @@ export function Dashboard() {
         console.error("Failed to load departments:", err)
       }
     }
-
     loadDepartments()
     return () => { mounted = false }
   }, [])
 
-  // Load faculty from DB and merge with static roster
+  // ── Faculty — real DB data only, no fake roster ────────────────────────────
   const [dbFaculty, setDbFaculty] = React.useState<FacultyRosterEntry[]>([])
 
   React.useEffect(() => {
@@ -292,66 +195,45 @@ export function Dashboard() {
         console.error("Failed to load DB faculty:", err)
       }
     }
-
     loadDbFaculty()
     return () => { mounted = false }
   }, [])
 
-  const mergedFaculty = React.useMemo(() => {
-    const seen = new Set<string>()
-    const merged: FacultyRosterEntry[] = []
-    for (const f of facultyRoster) {
-      merged.push(f)
-      seen.add((f.name || f.id).toLowerCase())
-    }
-    for (const f of dbFaculty) {
-      const key = (f.name || f.id).toLowerCase()
-      if (!seen.has(key)) {
-        merged.push(f)
-        seen.add(key)
-      }
-    }
-    return merged
-  }, [facultyRoster, dbFaculty])
+  // mergedFaculty is just dbFaculty — no fake roster mixed in
+  const mergedFaculty = dbFaculty
 
-  // When a DB-sourced faculty is selected and has no availability, fetch it on demand
+  // ── Lazy-load availability when a faculty is selected ─────────────────────
   React.useEffect(() => {
     if (!selectedFaculty) return
     const entry = mergedFaculty.find((f) => f.name === selectedFaculty)
     if (!entry) return
     if (entry.availability && entry.availability.length > 0) return
 
-    // only fetch for DB-provided entries (dbFaculty holds DB rows)
-    const isDb = dbFaculty.some((f) => f.id === entry.id)
-    if (!isDb) return
-
     let mounted = true
-    ;(async () => {
-      try {
-        const res = await getFacultyAvailability(entry.id)
-        const rows: any[] = res?.data ?? []
-        const mapped = rows.map((r) => {
-          const day = r.day ?? r.raw?.day ?? r.raw?.day_of_week ?? r.raw?.day_name ?? r.raw?.weekday ?? "Unknown"
-          let times = r.times ?? r.time ?? r.raw?.times ?? null
-          if (!times && r.raw) {
-            const s = r.raw.start_time ?? r.raw.start ?? r.raw.startTime ?? null
-            const e = r.raw.end_time ?? r.raw.end ?? r.raw.endTime ?? null
-            if (s && e) times = `${s} - ${e}`
-          }
-          if (!times) times = ""
-          return { day, times }
-        })
-
-        if (!mounted) return
-        setDbFaculty((prev) => prev.map((f) => (f.id === entry.id ? { ...f, availability: mapped } : f)))
-      } catch (err) {
-        console.error("Failed to load faculty availability:", err)
-      }
-    })()
+      ; (async () => {
+        try {
+          const res = await getFacultyAvailability(entry.id)
+          const rows: any[] = res?.data ?? []
+          const mapped = rows.map((r: any) => {
+            const day = r.dayOfWeek ?? r.day ?? "Unknown"
+            const times = r.startTime && r.endTime
+              ? `${r.startTime} - ${r.endTime}`
+              : r.times ?? ""
+            return { day, times }
+          })
+          if (!mounted) return
+          setDbFaculty((prev) =>
+            prev.map((f) => (f.id === entry.id ? { ...f, availability: mapped } : f))
+          )
+        } catch (err) {
+          console.error("Failed to load faculty availability:", err)
+        }
+      })()
 
     return () => { mounted = false }
-  }, [selectedFaculty, mergedFaculty, dbFaculty])
+  }, [selectedFaculty, mergedFaculty])
 
+  // ── Handlers ───────────────────────────────────────────────────────────────
   const handleOpenDialog = () => {
     setYear("2025")
     setTerm("Winter")
@@ -384,8 +266,6 @@ export function Dashboard() {
     ? mergedFaculty.filter((f) => f.taughtSubjects.length === 0 || f.taughtSubjects.includes(selectedSubject))
     : mergedFaculty
 
-  
-
   const filteredAssignedFaculty = assignedFaculty.filter((teacher) => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return true
@@ -401,6 +281,7 @@ export function Dashboard() {
   const pendingAssignments = assignedFaculty.filter((a) => a.status === "Pending").length
   const assignedCount = assignedFaculty.filter((a) => a.status === "Assigned").length
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   const renderContent = () => {
     if (viewState === "details") {
       return (
@@ -419,7 +300,6 @@ export function Dashboard() {
                 </p>
               </div>
             </div>
-
             <Button
               onClick={() => setIsAssignFacultyOpen(true)}
               size="lg"
@@ -456,9 +336,8 @@ export function Dashboard() {
                         <UsersIcon className="size-4" />
                       </div>
                       <CardTitle
-                        className={`text-base font-semibold transition-colors ${
-                          teacher.id ? "cursor-pointer hover:text-primary underline-offset-2 hover:underline" : ""
-                        }`}
+                        className={`text-base font-semibold transition-colors ${teacher.id ? "cursor-pointer hover:text-primary underline-offset-2 hover:underline" : ""
+                          }`}
                         onClick={() => {
                           if (teacher.id) router.push(`/faculty?id=${teacher.id}`)
                         }}
@@ -472,13 +351,12 @@ export function Dashboard() {
                       </Badge>
                       <Badge
                         variant="outline"
-                        className={`text-[10px] px-1.5 py-0 h-4 font-semibold border-0 ${
-                          teacher.status === "Assigned"
-                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                            : teacher.status === "Rejected"
+                        className={`text-[10px] px-1.5 py-0 h-4 font-semibold border-0 ${teacher.status === "Assigned"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          : teacher.status === "Rejected"
                             ? "bg-red-500/10 text-red-700 dark:text-red-400"
                             : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                        }`}
+                          }`}
                       >
                         {teacher.status}
                       </Badge>
@@ -493,7 +371,7 @@ export function Dashboard() {
                     </div>
                     <div className="flex items-center gap-3 text-muted-foreground">
                       <div className="bg-muted p-1.5 rounded-md text-foreground/70"><ClockIcon className="size-3.5" /></div>
-                      <span>{teacher.time}</span>
+                      <span>{teacher.time || "—"}</span>
                     </div>
                   </div>
                   <div className="flex gap-3 pt-3 mt-4 border-t border-border/40">
@@ -508,7 +386,7 @@ export function Dashboard() {
           {filteredAssignedFaculty.length === 0 && (
             <Card className="border-dashed border-border/60">
               <CardContent className="py-12 text-center text-muted-foreground">
-                No assignments matched your search.
+                {searchQuery ? "No assignments matched your search." : "No faculty assigned yet. Use the button above to assign faculty."}
               </CardContent>
             </Card>
           )}
@@ -559,7 +437,7 @@ export function Dashboard() {
               <div className="p-2 bg-purple-500/10 rounded-lg"><UsersIcon className="size-4 text-purple-500" /></div>
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold text-foreground">{mergedFaculty.length}</div>
+              <div className="text-2xl font-bold text-foreground">{mergedFaculty.length}</div>
               <p className="text-xs mt-1 font-medium text-emerald-500">{pendingAssignments} pending approvals</p>
             </CardContent>
           </Card>
@@ -601,55 +479,59 @@ export function Dashboard() {
                   View All
                 </Button>
               </CardHeader>
-
               <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50 hover:bg-muted/50 border-b border-border/60">
-                      <TableHead className="font-semibold text-foreground/80 pl-6 h-12">Faculty</TableHead>
-                      <TableHead className="font-semibold text-foreground/80">Course</TableHead>
-                      <TableHead className="font-semibold text-foreground/80">Status</TableHead>
-                      <TableHead className="text-right font-semibold text-foreground/80 pr-6">Details</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {assignedFaculty.slice(0, 5).map((faculty, i) => (
-                      <TableRow key={i} className="h-16 group hover:bg-muted/30 transition-colors cursor-pointer">
-                        <TableCell className="pl-6">
-                          <div className="flex items-center gap-3">
-                            <div className="size-9 rounded-full bg-gradient-to-tr from-primary/80 to-primary/40 flex items-center justify-center text-primary-foreground font-bold shrink-0 shadow-sm">
-                              {faculty.name.split(" ").map((n) => n[0]).join("")}
+                {assignedFaculty.length === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground text-sm">
+                    No assignments yet. Use &quot;Assign Faculty&quot; to get started.
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50 hover:bg-muted/50 border-b border-border/60">
+                        <TableHead className="font-semibold text-foreground/80 pl-6 h-12">Faculty</TableHead>
+                        <TableHead className="font-semibold text-foreground/80">Course</TableHead>
+                        <TableHead className="font-semibold text-foreground/80">Status</TableHead>
+                        <TableHead className="text-right font-semibold text-foreground/80 pr-6">Details</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {assignedFaculty.slice(0, 5).map((faculty, i) => (
+                        <TableRow key={i} className="h-16 group hover:bg-muted/30 transition-colors cursor-pointer">
+                          <TableCell className="pl-6">
+                            <div className="flex items-center gap-3">
+                              <div className="size-9 rounded-full bg-gradient-to-tr from-primary/80 to-primary/40 flex items-center justify-center text-primary-foreground font-bold shrink-0 shadow-sm">
+                                {faculty.name.split(" ").map((n) => n[0]).join("")}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-[15px]">{faculty.name}</span>
+                                <span className="text-xs text-muted-foreground font-medium">{faculty.load}</span>
+                              </div>
                             </div>
-                            <div className="flex flex-col">
-                              <span className="font-bold text-[15px]">{faculty.name}</span>
-                              <span className="text-xs text-muted-foreground font-medium">{faculty.load}</span>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">{faculty.course}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="secondary"
-                            className={`px-2.5 py-0.5 text-xs font-medium border-0 ${
-                              faculty.status === "Assigned"
+                          </TableCell>
+                          <TableCell className="font-medium">{faculty.course}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="secondary"
+                              className={`px-2.5 py-0.5 text-xs font-medium border-0 ${faculty.status === "Assigned"
                                 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                                 : faculty.status === "Rejected"
-                                ? "bg-red-500/10 text-red-700 dark:text-red-400"
-                                : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                            }`}
-                          >
-                            {faculty.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right pr-6">
-                          <Button variant="ghost" size="sm" className="gap-1 font-medium bg-background text-foreground shadow-sm border border-border/50 rounded-lg">
-                            Open <ChevronRightIcon className="size-3 text-muted-foreground" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                                  ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                                  : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                                }`}
+                            >
+                              {faculty.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right pr-6">
+                            <Button variant="ghost" size="sm" className="gap-1 font-medium bg-background text-foreground shadow-sm border border-border/50 rounded-lg">
+                              Open <ChevronRightIcon className="size-3 text-muted-foreground" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
 
@@ -660,7 +542,6 @@ export function Dashboard() {
                   Live room counts from the facilities-management public API.
                 </p>
               </CardHeader>
-
               <CardContent className="pt-5">
                 {facilityLoading ? (
                   <div className="text-sm text-muted-foreground">Loading facilities data...</div>
@@ -689,9 +570,7 @@ export function Dashboard() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <div>
-                        <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground mb-3">
-                          Campuses
-                        </h3>
+                        <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground mb-3">Campuses</h3>
                         <div className="space-y-3">
                           {campuses.map((campus) => (
                             <div key={campus.id} className="rounded-xl border border-border/50 bg-background p-4">
@@ -704,11 +583,8 @@ export function Dashboard() {
                           ))}
                         </div>
                       </div>
-
                       <div>
-                        <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground mb-3">
-                          Recent Rooms
-                        </h3>
+                        <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground mb-3">Recent Rooms</h3>
                         <div className="space-y-3">
                           {facilityRooms.map((room) => (
                             <div key={room.id} className="rounded-xl border border-border/50 bg-background p-4">
@@ -822,6 +698,7 @@ export function Dashboard() {
     <>
       {renderContent()}
 
+      {/* Term Setup Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden border-border/80 shadow-lg rounded-2xl">
           <div className="p-6 bg-muted/10 border-b border-border/60">
@@ -837,7 +714,6 @@ export function Dashboard() {
               </DialogDescription>
             </DialogHeader>
           </div>
-
           <div className="p-6">
             <form onSubmit={handleGoToDetails} className="space-y-5">
               <FieldGroup className="space-y-5">
@@ -909,6 +785,7 @@ export function Dashboard() {
         </DialogContent>
       </Dialog>
 
+      {/* Assign Faculty Dialog */}
       <Dialog
         open={isAssignFacultyOpen}
         onOpenChange={(open) => {
@@ -960,7 +837,11 @@ export function Dashboard() {
               </div>
 
               <div className="space-y-2 mt-1">
-                {eligibleFaculty.length === 0 ? (
+                {mergedFaculty.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 py-8 text-center text-sm text-muted-foreground">
+                    Loading faculty from database...
+                  </div>
+                ) : eligibleFaculty.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 py-8 text-center text-sm text-muted-foreground">
                     No faculty have previously taught <span className="font-medium text-foreground">{selectedSubject}</span>.
                   </div>
@@ -971,7 +852,7 @@ export function Dashboard() {
                   const capacityPct = Math.min((usedHours / f.maxHoursPerWeek) * 100, 100)
                   const noAvailability = f.availability.length === 0
                   const atCapacity = remainingHours <= 0
-                  const isDisabled = noAvailability || atCapacity
+                  const isDisabled = atCapacity
                   const isSelected = selectedFaculty === f.name
 
                   return (
@@ -983,8 +864,8 @@ export function Dashboard() {
                         isSelected
                           ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20"
                           : isDisabled
-                          ? "border-border/30 bg-muted/20 opacity-50 cursor-not-allowed"
-                          : "border-border/60 hover:border-primary/40 hover:bg-muted/20 cursor-pointer",
+                            ? "border-border/30 bg-muted/20 opacity-50 cursor-not-allowed"
+                            : "border-border/60 hover:border-primary/40 hover:bg-muted/20 cursor-pointer",
                       ].join(" ")}
                     >
                       <div className="flex items-start gap-3">
@@ -992,7 +873,7 @@ export function Dashboard() {
                           "shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mt-0.5",
                           index === 0 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                             : index === 1 ? "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                            : "bg-muted text-muted-foreground",
+                              : "bg-muted text-muted-foreground",
                         ].join(" ")}>
                           {index + 1}
                         </div>
@@ -1006,12 +887,7 @@ export function Dashboard() {
                             >
                               {f.employmentType}
                             </Badge>
-                            {noAvailability && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium text-muted-foreground">
-                                No Availability
-                              </Badge>
-                            )}
-                            {atCapacity && !noAvailability && (
+                            {atCapacity && (
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium text-red-600 border-red-300">
                                 At Capacity
                               </Badge>
@@ -1023,14 +899,14 @@ export function Dashboard() {
                           </div>
 
                           <div className="flex flex-wrap gap-1 mt-2">
-                            {f.availability.length > 0 ? (
+                            {noAvailability ? (
+                              <span className="text-[10px] text-muted-foreground italic">Availability not loaded yet</span>
+                            ) : (
                               f.availability.map((a) => (
                                 <span key={a.day} className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium">
                                   {a.day.slice(0, 3)}
                                 </span>
                               ))
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground italic">Not available this term</span>
                             )}
                           </div>
 
@@ -1058,8 +934,6 @@ export function Dashboard() {
                 })}
               </div>
             </div>
-
-            
           </div>
 
           <DialogFooter className="border-t border-border/60 p-6 shrink-0">
