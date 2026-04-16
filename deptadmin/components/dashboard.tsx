@@ -28,7 +28,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { getCampuses, getRooms } from "@/lib/facilities-api"
-import { getDepartments } from "@/lib/course-api"
+import { getDepartments, getCourses } from "@/lib/course-api"
 import { getFacultySchema, getFacultyAvailability } from "@/lib/faculty-schema-api"
 import type { Campus, Room, RoomStatus } from "@/lib/facilities-types"
 
@@ -153,19 +153,29 @@ export function Dashboard() {
   // ── Departments ────────────────────────────────────────────────────────────
   const [departments, setDepartments] = React.useState<string[]>([])
 
+  // ── Courses ────────────────────────────────────────────────────────────────
+  const [courseOptions, setCourseOptions] = React.useState<{ value: string; label: string }[]>([])
+
   React.useEffect(() => {
     let mounted = true
-    async function loadDepartments() {
+    async function loadDepartmentsAndCourses() {
       try {
-        const res = await getDepartments()
+        const [deptRes, courseRes] = await Promise.all([getDepartments(), getCourses()])
         if (!mounted) return
-        const names = Array.isArray(res?.data) ? res.data.map((d: any) => d.name) : []
+        const names = Array.isArray(deptRes?.data) ? deptRes.data.map((d: any) => d.name) : []
         setDepartments(names)
+        const courses: any[] = Array.isArray(courseRes?.data) ? courseRes.data : []
+        setCourseOptions(
+          courses.map((c) => ({
+            value: c.code ? `${c.code} – ${c.name}` : c.name,
+            label: c.code ? `${c.code} – ${c.name}` : c.name,
+          }))
+        )
       } catch (err) {
-        console.error("Failed to load departments:", err)
+        console.error("Failed to load departments/courses:", err)
       }
     }
-    loadDepartments()
+    loadDepartmentsAndCourses()
     return () => { mounted = false }
   }, [])
 
@@ -836,9 +846,13 @@ export function Dashboard() {
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-border/80 shadow-md">
                   <SelectGroup className="p-1">
-                    {["Advanced Algorithms", "Computer Networks", "Database Management", "Operating Systems", "Cloud Computing", "Software Engineering", "Web Development"].map((s) => (
-                      <SelectItem key={s} value={s} className="rounded-lg mb-0.5 cursor-pointer focus:bg-primary/10 focus:text-primary">
-                        {s}
+                    {courseOptions.length === 0 ? (
+                      <SelectItem value="_loading" disabled className="text-muted-foreground">
+                        Loading courses...
+                      </SelectItem>
+                    ) : courseOptions.map((c) => (
+                      <SelectItem key={c.value} value={c.value} className="rounded-lg mb-0.5 cursor-pointer focus:bg-primary/10 focus:text-primary">
+                        {c.label}
                       </SelectItem>
                     ))}
                   </SelectGroup>
