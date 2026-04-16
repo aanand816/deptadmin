@@ -5,12 +5,9 @@ import {
   BookOpenIcon,
   SearchIcon,
   FilterIcon,
-  Building2Icon,
-  CalendarDaysIcon,
-  Clock3Icon,
-  UserIcon,
-  Loader2Icon,
   GraduationCapIcon,
+  Loader2Icon,
+  BuildingIcon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -20,39 +17,33 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { getCampuses, getRoomTimetable, getRooms } from "@/lib/facilities-api"
-import type { Campus, Room } from "@/lib/facilities-types"
+import { getCourses, getDepartments } from "@/lib/course-api"
 
-type DerivedCourseRow = {
+type Course = {
   id: string
-  roomId: string
-  roomNumber: string
-  buildingName: string
-  buildingCode: string
-  campusName: string
-  courseCode: string
-  courseName: string
-  instructor: string
-  dayOfWeek: string
-  startTime: string
-  endTime: string
+  name: string
+  code: string
+  credits?: number | null
+  status?: string | null
+  departmentId?: string | null
+  department_name?: string | null
+  program_name?: string | null
 }
 
-const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-function compareDay(a: string, b: string) {
-  return DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b)
+type Department = {
+  id: string
+  name: string
 }
 
 export default function CoursesPage() {
-  const [courses, setCourses] = React.useState<DerivedCourseRow[]>([])
-  const [campuses, setCampuses] = React.useState<Campus[]>([])
+  const [courses, setCourses] = React.useState<Course[]>([])
+  const [departments, setDepartments] = React.useState<Department[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
   const [searchQuery, setSearchQuery] = React.useState("")
-  const [selectedCampus, setSelectedCampus] = React.useState("")
-  const [selectedDay, setSelectedDay] = React.useState("")
+  const [selectedDepartment, setSelectedDepartment] = React.useState("")
+  const [selectedStatus, setSelectedStatus] = React.useState("")
 
   React.useEffect(() => {
     async function loadCourses() {
@@ -60,42 +51,13 @@ export default function CoursesPage() {
         setLoading(true)
         setError(null)
 
-        const [roomsRes, campusesRes] = await Promise.all([
-          getRooms({ limit: 20 }),
-          getCampuses(),
+        const [coursesRes, departmentsRes] = await Promise.all([
+          getCourses(),
+          getDepartments(),
         ])
 
-        setCampuses(campusesRes.data)
-
-        const rows = await Promise.all(
-          roomsRes.data.map(async (room: Room) => {
-            try {
-              const timetableRes = await getRoomTimetable(room.id)
-              return timetableRes.data.slots.map((slot, index) => ({
-                id: `${room.id}-${slot.courseCode}-${slot.dayOfWeek}-${slot.startTime}-${index}`,
-                roomId: room.id,
-                roomNumber: room.roomNumber,
-                buildingName: room.building.name,
-                buildingCode: room.building.buildingCode,
-                campusName: room.building.campus?.name ?? "Unknown campus",
-                courseCode: slot.courseCode,
-                courseName: slot.courseName,
-                instructor: slot.instructor,
-                dayOfWeek: slot.dayOfWeek,
-                startTime: slot.startTime,
-                endTime: slot.endTime,
-              }))
-            } catch {
-              return []
-            }
-          })
-        )
-
-        const flattened = rows
-          .flat()
-          .sort((a, b) => compareDay(a.dayOfWeek, b.dayOfWeek) || a.startTime.localeCompare(b.startTime))
-
-        setCourses(flattened)
+        setCourses(coursesRes.data ?? [])
+        setDepartments(departmentsRes.data ?? [])
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load course data")
       } finally {
@@ -109,23 +71,28 @@ export default function CoursesPage() {
   const filteredCourses = courses.filter((course) => {
     const q = searchQuery.trim().toLowerCase()
     const matchesSearch = !q || [
-      course.courseCode,
-      course.courseName,
-      course.instructor,
-      course.roomNumber,
-      course.buildingName,
-      course.campusName,
-    ].some((value) => value.toLowerCase().includes(q))
+      course.code,
+      course.name,
+      course.department_name,
+      course.program_name,
+    ].some((value) => value?.toLowerCase().includes(q))
 
-    const matchesCampus = !selectedCampus || course.campusName === selectedCampus
-    const matchesDay = !selectedDay || course.dayOfWeek === selectedDay
+    const matchesDepartment = !selectedDepartment || course.department_name === selectedDepartment
+    const matchesStatus = !selectedStatus || course.status === selectedStatus
 
-    return matchesSearch && matchesCampus && matchesDay
+    return matchesSearch && matchesDepartment && matchesStatus
   })
 
-  const uniqueCourses = new Set(courses.map((course) => course.courseCode)).size
-  const uniqueInstructors = new Set(courses.map((course) => course.instructor)).size
-  const uniqueRooms = new Set(courses.map((course) => course.roomId)).size
+  const uniqueDepartments = new Set(courses.map((c) => c.department_name).filter(Boolean)).size
+  const activeCount = courses.filter((c) => c.status?.toLowerCase() === "active").length
+  const statusOptions = [...new Set(courses.map((c) => c.status).filter((s): s is string => !!s))]
+
+  function statusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
+    const s = status?.toLowerCase()
+    if (s === "active") return "default"
+    if (s === "inactive") return "secondary"
+    return "outline"
+  }
 
   return (
     <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-500 w-full min-h-full pb-10">
@@ -135,7 +102,7 @@ export default function CoursesPage() {
             Course Catalog
           </h1>
           <p className="text-muted-foreground mt-2 text-base max-w-2xl">
-            Live course schedule rows derived from facilities room timetable data.
+            All courses registered in the department database.
           </p>
         </div>
 
@@ -158,40 +125,40 @@ export default function CoursesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 lg:gap-6">
         <Card className="bg-card shadow-sm border-border/60">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Distinct Courses</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Courses</CardTitle>
             <div className="p-2 bg-blue-500/10 rounded-lg">
               <GraduationCapIcon className="size-4 text-blue-500" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{uniqueCourses}</div>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">Unique course codes found</p>
+            <div className="text-2xl font-bold text-foreground">{courses.length}</div>
+            <p className="text-xs text-muted-foreground mt-1 font-medium">Courses in the database</p>
           </CardContent>
         </Card>
 
         <Card className="bg-card shadow-sm border-border/60">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Instructors</CardTitle>
-            <div className="p-2 bg-purple-500/10 rounded-lg">
-              <UserIcon className="size-4 text-purple-500" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{uniqueInstructors}</div>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">Names extracted from timetables</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card shadow-sm border-border/60">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Teaching Rooms</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Active Courses</CardTitle>
             <div className="p-2 bg-emerald-500/10 rounded-lg">
-              <Building2Icon className="size-4 text-emerald-500" />
+              <BookOpenIcon className="size-4 text-emerald-500" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{uniqueRooms}</div>
-            <p className="text-xs text-muted-foreground mt-1 font-medium">Rooms contributing course slots</p>
+            <div className="text-2xl font-bold text-foreground">{activeCount}</div>
+            <p className="text-xs text-muted-foreground mt-1 font-medium">Currently active</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card shadow-sm border-border/60">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Departments</CardTitle>
+            <div className="p-2 bg-purple-500/10 rounded-lg">
+              <BuildingIcon className="size-4 text-purple-500" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-foreground">{uniqueDepartments}</div>
+            <p className="text-xs text-muted-foreground mt-1 font-medium">Departments offering courses</p>
           </CardContent>
         </Card>
       </div>
@@ -203,33 +170,33 @@ export default function CoursesPage() {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by code, name, instructor, room, building..."
+              placeholder="Search by code, name, department, program..."
               className="pl-9 h-10 rounded-lg border-border/60 bg-background"
             />
           </div>
 
           <select
-            value={selectedCampus}
-            onChange={(e) => setSelectedCampus(e.target.value)}
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value)}
             className="h-10 rounded-lg border border-border/60 bg-background px-3 text-sm"
           >
-            <option value="">All campuses</option>
-            {campuses.map((campus) => (
-              <option key={campus.id} value={campus.name}>
-                {campus.name}
+            <option value="">All departments</option>
+            {departments.map((dept) => (
+              <option key={dept.id} value={dept.name}>
+                {dept.name}
               </option>
             ))}
           </select>
 
           <select
-            value={selectedDay}
-            onChange={(e) => setSelectedDay(e.target.value)}
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
             className="h-10 rounded-lg border border-border/60 bg-background px-3 text-sm"
           >
-            <option value="">All days</option>
-            {DAY_ORDER.map((day) => (
-              <option key={day} value={day}>
-                {day}
+            <option value="">All statuses</option>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
               </option>
             ))}
           </select>
@@ -240,7 +207,7 @@ export default function CoursesPage() {
         <Card className="border-border/60 shadow-sm">
           <CardContent className="p-8 flex items-center justify-center text-muted-foreground">
             <Loader2Icon className="size-5 animate-spin mr-2" />
-            Loading course data from room timetables...
+            Loading courses from database...
           </CardContent>
         </Card>
       ) : error ? (
@@ -255,10 +222,10 @@ export default function CoursesPage() {
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b border-border/60">
                 <TableHead className="font-semibold text-foreground/80 pl-6 h-12">Course</TableHead>
-                <TableHead className="font-semibold text-foreground/80">Instructor</TableHead>
-                <TableHead className="font-semibold text-foreground/80">Schedule</TableHead>
-                <TableHead className="font-semibold text-foreground/80">Location</TableHead>
-                <TableHead className="text-right font-semibold text-foreground/80 pr-6">Campus</TableHead>
+                <TableHead className="font-semibold text-foreground/80">Department</TableHead>
+                <TableHead className="font-semibold text-foreground/80">Program</TableHead>
+                <TableHead className="font-semibold text-foreground/80">Credits</TableHead>
+                <TableHead className="text-right font-semibold text-foreground/80 pr-6">Status</TableHead>
               </TableRow>
             </TableHeader>
 
@@ -271,44 +238,31 @@ export default function CoursesPage() {
                         <BookOpenIcon className="size-4" />
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-bold text-[15px]">{course.courseCode}</span>
-                        <span className="text-xs text-muted-foreground font-medium">{course.courseName}</span>
+                        <span className="font-bold text-[15px]">{course.code}</span>
+                        <span className="text-xs text-muted-foreground font-medium">{course.name}</span>
                       </div>
                     </div>
                   </TableCell>
 
                   <TableCell>
-                    <div className="flex items-center gap-2 text-sm font-medium text-foreground/90">
-                      <UserIcon className="size-4 text-muted-foreground" />
-                      {course.instructor}
-                    </div>
+                    <span className="text-sm font-medium text-foreground/90">
+                      {course.department_name ?? "—"}
+                    </span>
                   </TableCell>
 
                   <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground/90">
-                        <CalendarDaysIcon className="size-4 text-muted-foreground" />
-                        {course.dayOfWeek}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Clock3Icon className="size-3.5" />
-                        {course.startTime} - {course.endTime}
-                      </span>
-                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {course.program_name ?? "—"}
+                    </span>
                   </TableCell>
 
                   <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <span className="font-semibold text-sm">{course.roomNumber}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {course.buildingName} ({course.buildingCode})
-                      </span>
-                    </div>
+                    <span className="text-sm font-semibold">{course.credits}</span>
                   </TableCell>
 
                   <TableCell className="text-right pr-6">
-                    <Badge variant="secondary" className="bg-muted text-foreground/80 border border-border/40 shadow-sm font-medium">
-                      {course.campusName}
+                    <Badge variant={statusVariant(course.status ?? "")} className="font-medium capitalize">
+                      {course.status ?? "—"}
                     </Badge>
                   </TableCell>
                 </TableRow>
@@ -318,7 +272,7 @@ export default function CoursesPage() {
 
           {filteredCourses.length === 0 && (
             <div className="py-12 text-center text-muted-foreground text-sm">
-              No course timetable rows matched your filters.
+              No courses matched your filters.
             </div>
           )}
         </Card>

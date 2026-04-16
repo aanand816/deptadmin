@@ -3,15 +3,16 @@ import { facultyQuery } from "@/lib/db"
 
 export async function GET(
     _req: Request,
-    { params }: { params: { facultyId: string } }
+    { params }: { params: Promise<{ facultyId: string }> }
 ) {
+    const { facultyId } = await params
     try {
         const result = await facultyQuery(
             `SELECT id, "facultyId", "dayOfWeek", "startTime", "endTime"
        FROM availability
        WHERE "facultyId" = $1
        ORDER BY "dayOfWeek" ASC`,
-            [params.facultyId]
+            [facultyId]
         )
         return NextResponse.json({ data: result.rows })
     } catch (err: any) {
