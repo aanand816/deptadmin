@@ -20,7 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     { name: 'Dashboard', href: '/', icon: LayoutDashboardIcon },
     { name: 'Faculty Management', href: '/faculty', icon: UsersIcon },
     { name: 'Course Catalog', href: '/courses', icon: BookOpenIcon },
-    { name: 'Scheduling', href: '/scheduling', icon: CalendarIcon },
+    { name: 'Facilities', href: '/scheduling', icon: CalendarIcon },
   ]
 
   // Find current path name for the breadcrumb

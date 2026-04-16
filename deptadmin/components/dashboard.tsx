@@ -28,6 +28,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { getCampuses, getRooms } from "@/lib/facilities-api"
+import { getDepartments } from "@/lib/course-api"
+import { getFacultySchema, getFacultyAvailability } from "@/lib/faculty-schema-api"
 import type { Campus, Room, RoomStatus } from "@/lib/facilities-types"
 
 // Shared localStorage key — faculty page reads/writes the same store
@@ -163,24 +165,24 @@ export function Dashboard() {
   const [isAssignFacultyOpen, setIsAssignFacultyOpen] = React.useState(false)
   const [selectedFaculty, setSelectedFaculty] = React.useState("")
   const [selectedSubject, setSelectedSubject] = React.useState("")
-  const [selectedTimeSlot, setSelectedTimeSlot] = React.useState("")
   const [viewState, setViewState] = React.useState<"dashboard" | "details">("dashboard")
   const [year, setYear] = React.useState<string>("2025")
   const [term, setTerm] = React.useState<string>("Winter")
   const [activeDepartment, setActiveDepartment] = React.useState<string>("Faculty of Applied Science and Technology")
   const [searchQuery, setSearchQuery] = React.useState("")
 
-  React.useEffect(() => { setSelectedTimeSlot("") }, [selectedFaculty])
+  
 
-  const [assignedFaculty, setAssignedFaculty] = React.useState<AssignmentRecord[]>(() => {
-    if (typeof window === "undefined") return defaultAssignments
+  const [assignedFaculty, setAssignedFaculty] = React.useState<AssignmentRecord[]>(defaultAssignments)
+
+  React.useEffect(() => {
     try {
       const stored = localStorage.getItem(ASSIGNMENT_STORAGE_KEY)
-      return stored ? (JSON.parse(stored) as AssignmentRecord[]) : defaultAssignments
-    } catch {
-      return defaultAssignments
+      if (stored) setAssignedFaculty(JSON.parse(stored) as AssignmentRecord[])
+    } catch (err) {
+      console.error("Failed to load assignments from localStorage:", err)
     }
-  })
+  }, [])
 
   React.useEffect(() => {
     localStorage.setItem(ASSIGNMENT_STORAGE_KEY, JSON.stringify(assignedFaculty))
@@ -247,13 +249,108 @@ export function Dashboard() {
     loadFacilitiesOverview()
   }, [])
 
-  const departments = [
-    "Faculty of Applied Science and Technology",
-    "Faculty of Business",
-    "Faculty of Health Sciences",
-    "Faculty of Media and Creative Arts",
-    "Faculty of Social and Community Services",
-  ]
+  const [departments, setDepartments] = React.useState<string[]>([])
+
+  React.useEffect(() => {
+    let mounted = true
+    async function loadDepartments() {
+      try {
+        const res = await getDepartments()
+        if (!mounted) return
+        const names = Array.isArray(res?.data) ? res.data.map((d: any) => d.name) : []
+        setDepartments(names)
+      } catch (err) {
+        console.error("Failed to load departments:", err)
+      }
+    }
+
+    loadDepartments()
+    return () => { mounted = false }
+  }, [])
+
+  // Load faculty from DB and merge with static roster
+  const [dbFaculty, setDbFaculty] = React.useState<FacultyRosterEntry[]>([])
+
+  React.useEffect(() => {
+    let mounted = true
+    async function loadDbFaculty() {
+      try {
+        const res = await getFacultySchema()
+        const rows: any[] = res?.data ?? []
+        const mapped: FacultyRosterEntry[] = rows.map(r => ({
+          id: String(r.id ?? r.userId ?? r.employeeId ?? `db-${Math.random().toString(36).slice(2)}`),
+          name: r.user_name ?? r.user_email ?? `User ${r.userId ?? r.id}`,
+          role: r.designation ?? "Faculty",
+          employmentType: "Full-Time",
+          seniority: 0,
+          maxHoursPerWeek: 18,
+          availability: [],
+          taughtSubjects: [],
+        }))
+        if (mounted) setDbFaculty(mapped)
+      } catch (err) {
+        console.error("Failed to load DB faculty:", err)
+      }
+    }
+
+    loadDbFaculty()
+    return () => { mounted = false }
+  }, [])
+
+  const mergedFaculty = React.useMemo(() => {
+    const seen = new Set<string>()
+    const merged: FacultyRosterEntry[] = []
+    for (const f of facultyRoster) {
+      merged.push(f)
+      seen.add((f.name || f.id).toLowerCase())
+    }
+    for (const f of dbFaculty) {
+      const key = (f.name || f.id).toLowerCase()
+      if (!seen.has(key)) {
+        merged.push(f)
+        seen.add(key)
+      }
+    }
+    return merged
+  }, [facultyRoster, dbFaculty])
+
+  // When a DB-sourced faculty is selected and has no availability, fetch it on demand
+  React.useEffect(() => {
+    if (!selectedFaculty) return
+    const entry = mergedFaculty.find((f) => f.name === selectedFaculty)
+    if (!entry) return
+    if (entry.availability && entry.availability.length > 0) return
+
+    // only fetch for DB-provided entries (dbFaculty holds DB rows)
+    const isDb = dbFaculty.some((f) => f.id === entry.id)
+    if (!isDb) return
+
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await getFacultyAvailability(entry.id)
+        const rows: any[] = res?.data ?? []
+        const mapped = rows.map((r) => {
+          const day = r.day ?? r.raw?.day ?? r.raw?.day_of_week ?? r.raw?.day_name ?? r.raw?.weekday ?? "Unknown"
+          let times = r.times ?? r.time ?? r.raw?.times ?? null
+          if (!times && r.raw) {
+            const s = r.raw.start_time ?? r.raw.start ?? r.raw.startTime ?? null
+            const e = r.raw.end_time ?? r.raw.end ?? r.raw.endTime ?? null
+            if (s && e) times = `${s} - ${e}`
+          }
+          if (!times) times = ""
+          return { day, times }
+        })
+
+        if (!mounted) return
+        setDbFaculty((prev) => prev.map((f) => (f.id === entry.id ? { ...f, availability: mapped } : f)))
+      } catch (err) {
+        console.error("Failed to load faculty availability:", err)
+      }
+    })()
+
+    return () => { mounted = false }
+  }, [selectedFaculty, mergedFaculty, dbFaculty])
 
   const handleOpenDialog = () => {
     setYear("2025")
@@ -268,30 +365,26 @@ export function Dashboard() {
   }
 
   const handleAddFacultySubmit = () => {
-    const roster = facultyRoster.find((f) => f.name === selectedFaculty)
+    const roster = mergedFaculty.find((f) => f.name === selectedFaculty)
     setAssignedFaculty((prev) => [...prev, {
       assignmentId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       id: roster?.id ?? "",
       name: selectedFaculty,
       course: selectedSubject,
-      time: selectedTimeSlot,
+      time: "",
       load: roster?.employmentType ?? "Full-Time",
       status: "Pending",
     }])
     setIsAssignFacultyOpen(false)
     setSelectedFaculty("")
     setSelectedSubject("")
-    setSelectedTimeSlot("")
   }
 
   const eligibleFaculty = selectedSubject
-    ? facultyRoster.filter((f) => f.taughtSubjects.includes(selectedSubject))
-    : facultyRoster
+    ? mergedFaculty.filter((f) => f.taughtSubjects.length === 0 || f.taughtSubjects.includes(selectedSubject))
+    : mergedFaculty
 
-  const selectedFacultyEntry = facultyRoster.find((f) => f.name === selectedFaculty)
-  const availableTimeSlots = selectedFacultyEntry
-    ? generateTimeSlots(selectedFacultyEntry.availability)
-    : []
+  
 
   const filteredAssignedFaculty = assignedFaculty.filter((teacher) => {
     const q = searchQuery.trim().toLowerCase()
@@ -466,7 +559,7 @@ export function Dashboard() {
               <div className="p-2 bg-purple-500/10 rounded-lg"><UsersIcon className="size-4 text-purple-500" /></div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">{facultyRoster.length}</div>
+                <div className="text-2xl font-bold text-foreground">{mergedFaculty.length}</div>
               <p className="text-xs mt-1 font-medium text-emerald-500">{pendingAssignments} pending approvals</p>
             </CardContent>
           </Card>
@@ -641,7 +734,7 @@ export function Dashboard() {
 
                     <div className="flex justify-end">
                       <Button onClick={() => router.push("/scheduling")} className="rounded-xl">
-                        Open Scheduling <ChevronRightIcon className="ml-2 size-4" />
+                        Open Facilities <ChevronRightIcon className="ml-2 size-4" />
                       </Button>
                     </div>
                   </div>
@@ -670,7 +763,7 @@ export function Dashboard() {
                 </Button>
                 <Button variant="outline" className="w-full justify-start rounded-xl" onClick={() => router.push("/scheduling")}>
                   <Building2Icon className="mr-2 size-4" />
-                  Open Facilities Scheduling
+                  Open Facilities
                 </Button>
               </CardContent>
             </Card>
@@ -823,7 +916,6 @@ export function Dashboard() {
           if (!open) {
             setSelectedFaculty("")
             setSelectedSubject("")
-            setSelectedTimeSlot("")
           }
         }}
       >
@@ -967,35 +1059,7 @@ export function Dashboard() {
               </div>
             </div>
 
-            {selectedFaculty && (
-              <div className="space-y-2.5">
-                <FieldLabel className="font-semibold text-foreground/80">
-                  Available Time Slots
-                  <span className="ml-2 text-[11px] text-muted-foreground font-normal">for {selectedFaculty}</span>
-                </FieldLabel>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {availableTimeSlots.length > 0 ? availableTimeSlots.map((slot) => (
-                    <button
-                      key={slot}
-                      type="button"
-                      onClick={() => setSelectedTimeSlot(slot)}
-                      className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                        selectedTimeSlot === slot
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border/60 bg-background hover:bg-muted/30"
-                      }`}
-                    >
-                      {slot}
-                    </button>
-                  )) : (
-                    <div className="col-span-full rounded-xl border border-dashed border-border/60 bg-muted/20 py-6 text-center text-sm text-muted-foreground">
-                      No time slots are available for this faculty member.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            
           </div>
 
           <DialogFooter className="border-t border-border/60 p-6 shrink-0">
@@ -1005,7 +1069,7 @@ export function Dashboard() {
             <Button
               type="button"
               onClick={handleAddFacultySubmit}
-              disabled={!selectedFaculty || !selectedSubject || !selectedTimeSlot}
+              disabled={!selectedFaculty || !selectedSubject}
               className="rounded-xl px-6"
             >
               Assign Faculty

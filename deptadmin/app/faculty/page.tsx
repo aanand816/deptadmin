@@ -24,6 +24,7 @@ import {
 import {
   Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
+import { getFacultySchema } from "@/lib/faculty-schema-api"
 
 type Faculty = {
   id: string;
@@ -125,18 +126,66 @@ function FacultyPageInner() {
   const [viewState, setViewState] = React.useState<"directory" | "details">("directory")
   const [selectedFaculty, setSelectedFaculty] = React.useState<Faculty | null>(null)
   const [facultyData, setFacultyData] = React.useState<Faculty[]>(initialFacultyData)
+  const [dbFaculty, setDbFaculty] = React.useState<Faculty[]>([])
 
-  // Auto-open faculty profile when navigated from the dashboard
+  React.useEffect(() => {
+    let mounted = true
+    async function loadDb() {
+      try {
+        const res = await getFacultySchema()
+        const rows: any[] = res?.data ?? []
+        const mapped: Faculty[] = rows.map(r => ({
+          id: String(r.id),
+          name: r.user_name ?? `User ${r.userId ?? r.id}`,
+          role: r.designation ?? "Faculty",
+          department: r.departmentId ?? "",
+          status: r.status ?? "Active",
+          email: r.user_email ?? "",
+          phone: "—",
+          office: "—",
+          preferredSubjects: [],
+          availability: [],
+          assignments: [],
+          pastCourses: [],
+        }))
+        if (mounted) setDbFaculty(mapped)
+      } catch (err) {
+        console.error("Failed to load faculty from DB:", err)
+      }
+    }
+
+    loadDb()
+    return () => { mounted = false }
+  }, [])
+
+  const displayFaculty = React.useMemo(() => {
+    const seen = new Set<string>()
+    const merged: Faculty[] = []
+    for (const f of facultyData) {
+      merged.push(f)
+      seen.add((f.email || f.name).toLowerCase())
+    }
+    for (const f of dbFaculty) {
+      const key = (f.email || f.name).toLowerCase()
+      if (!seen.has(key)) {
+        merged.push(f)
+        seen.add(key)
+      }
+    }
+    return merged
+  }, [facultyData, dbFaculty])
+
+  // Auto-open faculty profile when navigated from the dashboard (checks static + DB)
   React.useEffect(() => {
     const id = searchParams.get("id")
     if (id) {
-      const found = initialFacultyData.find(f => f.id === id)
+      const found = displayFaculty.find(f => f.id === id)
       if (found) {
         setSelectedFaculty(found)
         setViewState("details")
       }
     }
-  }, [searchParams])
+  }, [searchParams, displayFaculty])
 
   // Assignment requests from localStorage (written by the dashboard)
   const [allAssignments, setAllAssignments] = React.useState<AssignmentRecord[]>(() => {
@@ -828,7 +877,7 @@ function FacultyPageInner() {
             <div className="p-2 bg-blue-500/10 rounded-lg"><UsersIcon className="size-4 text-blue-500" /></div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{facultyData.length + 119}</div>
+            <div className="text-2xl font-bold text-foreground">{displayFaculty.length + 119}</div>
             <p className="text-xs text-muted-foreground mt-1 font-medium text-emerald-500">+12% from last year</p>
           </CardContent>
         </Card>
@@ -868,7 +917,7 @@ function FacultyPageInner() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {facultyData.map((faculty, i) => (
+              {displayFaculty.map((faculty, i) => (
                 <TableRow
                   key={i}
                   onClick={() => showDetails(faculty)}
