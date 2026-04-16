@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { facultyQuery } from "@/lib/db"   // ← only change this line
 
 export async function GET(req: NextRequest) {
   try {
-    const res = await query(`
+    const res = await facultyQuery(`
       SELECT f."id", f."userId", f."employeeId", f."designation", f."departmentId", f."status", f."createdAt", f."updatedAt",
              u.name AS user_name, u.email AS user_email
       FROM faculty_schema."Faculty" f

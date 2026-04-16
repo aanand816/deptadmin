@@ -1,18 +1,22 @@
-import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { NextResponse } from "next/server"
+import { courseQuery } from "@/lib/db"
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const res = await query(`
-      SELECT id, name, code, description, credits, lecture_hours, lab_hours, status, program_id, course_kind, elective_group_id, program_semester_id, created_at, updated_at
-      FROM course_schema.courses
-      ORDER BY code
-    `)
-    return NextResponse.json({ data: res.rows })
-  } catch (err) {
+    const result = await courseQuery(
+      `SELECT
+         c.id, c.name, c.code, c.credits, c.status,
+         c.department_id, c.program_id,
+         d.name AS department_name,
+         p.name AS program_name
+       FROM courses c
+       LEFT JOIN departments d ON d.id = c.department_id
+       LEFT JOIN programs    p ON p.id = c.program_id
+       ORDER BY c.name ASC`
+    )
+    return NextResponse.json({ data: result.rows })
+  } catch (err: any) {
     console.error("GET /api/course_schema/courses error:", err)
-    const message = err instanceof Error ? err.message : String(err)
-    const safe = /password|secret|token|dsn|connectionstring/i.test(message) ? "Database error" : message
-    return NextResponse.json({ error: safe }, { status: 500 })
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

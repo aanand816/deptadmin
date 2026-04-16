@@ -1,18 +1,15 @@
-import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { NextResponse } from "next/server"
+import { courseQuery } from "@/lib/db"
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const res = await query(`
-      SELECT id, name, code, duration_years, status, department_id, created_at, updated_at
-      FROM course_schema.programs
-      ORDER BY name
-    `)
-    return NextResponse.json({ data: res.rows })
-  } catch (err) {
+    const result = await courseQuery(
+      `SELECT id, name, code, department_id, status
+       FROM programs ORDER BY name ASC`
+    )
+    return NextResponse.json({ data: result.rows })
+  } catch (err: any) {
     console.error("GET /api/course_schema/programs error:", err)
-    const message = err instanceof Error ? err.message : String(err)
-    const safe = /password|secret|token|dsn|connectionstring/i.test(message) ? "Database error" : message
-    return NextResponse.json({ error: safe }, { status: 500 })
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

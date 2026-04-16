@@ -1,18 +1,16 @@
-import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { NextResponse } from "next/server"
+import { schedulerQuery } from "@/lib/db"
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const res = await query(`
-      SELECT "id", "code", "name", "createdAt", "updatedAt"
-      FROM scheduler_schema."Department"
-      ORDER BY "name"
-    `)
-    return NextResponse.json({ data: res.rows })
-  } catch (err) {
+    const result = await schedulerQuery(
+      `SELECT id, name, code
+       FROM scheduler_schema.department
+       ORDER BY name ASC`
+    )
+    return NextResponse.json({ data: result.rows })
+  } catch (err: any) {
     console.error("GET /api/scheduler_schema/department error:", err)
-    const message = err instanceof Error ? err.message : String(err)
-    const safe = /password|secret|token|dsn|connectionstring/i.test(message) ? "Database error" : message
-    return NextResponse.json({ error: safe }, { status: 500 })
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

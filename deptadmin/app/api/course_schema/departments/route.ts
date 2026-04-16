@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { courseQuery } from "@/lib/db"   // ← only change this line
 
 export async function GET(req: NextRequest) {
   try {
-    const res = await query(`SELECT id, name, code FROM course_schema.departments ORDER BY name`)
+    const res = await courseQuery(`SELECT id, name, code FROM course_schema.departments ORDER BY name`)
     return NextResponse.json({ data: res.rows })
   } catch (err) {
     console.error("GET /api/course_schema/departments error:", err)
