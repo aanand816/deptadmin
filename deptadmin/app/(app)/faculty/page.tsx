@@ -10,7 +10,6 @@ import {
   UserPlusIcon, InboxIcon, CheckIcon, XIcon, PaperclipIcon, ImageIcon, SendIcon,
   Loader2Icon,
 } from "lucide-react"
-import { ASSIGNMENT_STORAGE_KEY, type AssignmentRecord } from "@/components/dashboard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -170,35 +169,60 @@ function FacultyPageInner() {
     }
   }
 
-  // ── Assignment requests (localStorage, written by dashboard) ─────────────
-  const [allAssignments, setAllAssignments] = React.useState<AssignmentRecord[]>(() => {
-    if (typeof window === "undefined") return []
-    try {
-      const stored = localStorage.getItem(ASSIGNMENT_STORAGE_KEY)
-      return stored ? JSON.parse(stored) : []
-    } catch { return [] }
-  })
+  // ── Assignment requests (DB-backed) ──────────────────────────────────────
+  const [allAssignments, setAllAssignments] = React.useState<AssignmentRecord[]>([])
 
   React.useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === ASSIGNMENT_STORAGE_KEY && e.newValue) {
-        try { setAllAssignments(JSON.parse(e.newValue)) } catch { /* ignore */ }
+    async function load() {
+      try {
+        const res = await fetch("/api/assignments")
+        const json = await res.json()
+        const rows: any[] = json.data ?? []
+        setAllAssignments(rows.map((r) => ({
+          assignmentId: r.assignmentId,
+          id: r.facultyId,
+          name: r.facultyName ?? "—",
+          course: r.course ?? "—",
+          time: r.day && r.startTime && r.endTime
+            ? `${r.day} ${r.startTime}–${r.endTime}`
+            : "—",
+          load: "Full-Time",
+          status: r.status === "ACCEPTED" ? "Assigned"
+            : r.status === "REJECTED" ? "Rejected"
+              : "Pending",
+        })))
+      } catch (err) {
+        console.error("Failed to load assignments:", err)
       }
     }
-    window.addEventListener("storage", onStorage)
-    return () => window.removeEventListener("storage", onStorage)
+    load()
   }, [])
 
-  const updateAssignmentStatus = (assignmentId: string, status: "Assigned" | "Rejected") => {
-    setAllAssignments((prev) => {
-      const updated = prev.map((a) =>
-        a.assignmentId === assignmentId ? { ...a, status } : a
+  const updateAssignmentStatus = async (assignmentId: string, status: "Assigned" | "Rejected") => {
+    // Optimistic UI update first — feels instant
+    setAllAssignments((prev) =>
+      prev.map((a) => a.assignmentId === assignmentId ? { ...a, status } : a)
+    )
+    try {
+      await fetch(`/api/assignments/${assignmentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: status === "Assigned" ? "ACCEPTED" : "REJECTED",
+        }),
+      })
+    } catch (err) {
+      console.error("Failed to update assignment status:", err)
+      // Rollback if API call failed
+      setAllAssignments((prev) =>
+        prev.map((a) =>
+          a.assignmentId === assignmentId
+            ? { ...a, status: status === "Assigned" ? "Pending" : "Pending" }
+            : a
+        )
       )
-      localStorage.setItem(ASSIGNMENT_STORAGE_KEY, JSON.stringify(updated))
-      return updated
-    })
+    }
   }
-
   // ── Message dialog ─────────────────────────────────────────────────────────
   const [isMessageOpen, setIsMessageOpen] = React.useState(false)
   const [messageText, setMessageText] = React.useState("")
